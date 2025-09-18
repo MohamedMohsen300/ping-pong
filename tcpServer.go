@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net"
 )
-// welcome
+
 func main() {
-	listen, err := net.Listen("tcp", "localhost:5000")
+	listen, err := net.Listen("tcp", "0.0.0.0:5000")
 	if err != nil {
 		panic(err)
 	}
