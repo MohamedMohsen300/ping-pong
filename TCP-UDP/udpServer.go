@@ -6,7 +6,8 @@ import (
 )
 
 func udp() {
-	conn, err := net.ListenPacket("udp", "0.0.0.0:9001")
+	addr,_ := net.ResolveUDPAddr("udp","0.0.0.0:9001")
+	conn, err := net.ListenUDP("udp", addr)
 	if err != nil {
 		panic(err)
 	}
