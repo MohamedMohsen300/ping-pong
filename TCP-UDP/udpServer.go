@@ -12,7 +12,7 @@ func udp() {
 	}
 	defer conn.Close()
 
-	fmt.Println("UDP server is listening on port 5001")
+	fmt.Println("UDP server is listening on port 9001")
 
 	buf := make([]byte, 1024)
 
