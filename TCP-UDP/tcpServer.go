@@ -11,7 +11,7 @@ func tcp() {
 		panic(err)
 	}
 	defer listen.Close()
-	fmt.Println("TCP Server is listening on Port:5000")
+	fmt.Println("TCP Server is listening on Port:9000")
 
 	for {
 		// open new session
