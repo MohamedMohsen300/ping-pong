@@ -6,7 +6,7 @@ import (
 )
 
 func tcp() {
-	listen, err := net.Listen("tcp", "0.0.0.0:5000")
+	listen, err := net.Listen("tcp", "0.0.0.0:9000")
 	if err != nil {
 		panic(err)
 	}
