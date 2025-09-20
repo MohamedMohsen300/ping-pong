@@ -26,6 +26,7 @@ func udp() {
 
 		// send message
 		_,err =conn.WriteTo([]byte(string(buf[:n])), addr)
+		fmt.Println(addr)
 		if err != nil {
 			println(err)
 		}
