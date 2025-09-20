@@ -45,9 +45,9 @@ func udp() {
 	// to send check after 10 min
 	go func() {
 		for {
-			time.Sleep(4 * time.Minute)
+			time.Sleep(10 * time.Minute)
 			for _, cAddr := range clientsAddress {
-				fmt.Println("send conn")
+				fmt.Println("send check connection")
 				conn.WriteTo([]byte("check connection"), cAddr)
 			}
 		}
