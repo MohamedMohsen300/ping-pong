@@ -43,13 +43,13 @@ func (s *Server) HandleRegisterClient(id string, addr *net.UDPAddr) {
 	fmt.Println("Registered client:", id, addr)
 }
 
-func (s *Server) HandlePing(addr *net.UDPAddr) {
+func (s *Server) HandlePing(addr *net.UDPAddr, id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	for _, c := range s.clients {
 		if c.Addr.String() == addr.String() {
-			fmt.Printf("pong to client %s \n", c.ID)
+			fmt.Printf("pong to client %s \n", id)
 			msg := "pong"
 			s.conn.WriteToUDP([]byte(msg), addr)
 			return
@@ -119,7 +119,8 @@ func (s *Server) Start() {
 			id := string(buf[1:n])
 			s.HandleRegisterClient(id, addr)
 		case 2:
-			s.HandlePing(addr)
+			id := string(buf[1:n])
+			s.HandlePing(addr, id)
 		case 3:
 			s.HandleMessage(addr, message)
 
