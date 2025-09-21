@@ -39,16 +39,28 @@ func NewServer(port_server string) (*Server, error) {
 func (s *Server) HandleRegisterClient(id string, addr *net.UDPAddr) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.clients[addr.String()] = &Client{ID: id, Addr: addr}
+	s.clients[id] = &Client{ID: id, Addr: addr}
 	fmt.Println("Registered client:", id, addr)
 }
 
 func (s *Server) HandlePing(addr *net.UDPAddr) {
 	s.mu.Lock()
-	client := s.clients[addr.String()]
-	s.mu.Unlock()
+	defer s.mu.Unlock()
 
-	msg := fmt.Sprintf("pong from server to client %s", client.ID)
+	var foundClient *Client
+	for _, c := range s.clients {
+		if c.Addr.String() == addr.String() {
+			foundClient = c
+			break
+		}
+	}
+
+	if foundClient == nil {
+		fmt.Println("client not found tried to ping:", addr)
+		return
+	}
+
+	msg := fmt.Sprintf("pong from server to client %s", foundClient.ID)
 	s.conn.WriteToUDP([]byte(msg), addr)
 }
 
@@ -67,9 +79,7 @@ func (s *Server) checkConnection() {
 
 func (s *Server) MessageFromServerAnyTime() {
 	for {
-		var cmd, id string
-		var msg string
-
+		var cmd, id, msg string
 		_, err := fmt.Scanln(&cmd, &id, &msg)
 		if err != nil {
 			fmt.Println("Error reading input:", err)
@@ -78,11 +88,8 @@ func (s *Server) MessageFromServerAnyTime() {
 
 		if cmd == "send" {
 			s.mu.Lock()
-			for _, client := range s.clients {
-				if client.ID == id {
-					s.conn.WriteToUDP([]byte(msg), client.Addr)
-				}
-			}
+			client := s.clients[id]
+			s.conn.WriteToUDP([]byte(msg), client.Addr)
 			s.mu.Unlock()
 		} else {
 			fmt.Println("Unknown command:", cmd)
@@ -110,10 +117,15 @@ func (s *Server) Start() {
 			s.HandlePing(addr)
 		default:
 			s.mu.Lock()
-			client := s.clients[addr.String()]
+			var clientID string
+			for _, c := range s.clients {
+				if c.Addr.String() == addr.String() {
+					clientID = c.ID
+					break
+				}
+			}
 			s.mu.Unlock()
-
-			fmt.Printf("Message from client %s: %s\n", client.ID, message)
+			fmt.Printf("Message from client %s: %s\n", clientID, message)
 		}
 	}
 }
