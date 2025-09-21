@@ -119,7 +119,7 @@ func (s *Server) Start() {
 }
 
 func main() {
-	server, err := NewServer("127.0.0.1:9000")
+	server, err := NewServer("173.208.144.109:9000")
 	if err != nil {
 		panic(err)
 	}
