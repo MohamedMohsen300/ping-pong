@@ -41,7 +41,6 @@ func (s *Server) HandleRegisterClient(id string, addr *net.UDPAddr) {
 	defer s.mu.Unlock()
 	s.clients[id] = &Client{ID: id, Addr: addr}
 	fmt.Println("Registered client:", id, addr)
-	println(id)
 }
 
 func (s *Server) HandlePing(addr *net.UDPAddr) {
@@ -115,17 +114,17 @@ func (s *Server) Start() {
 		messageType := buf[0]
 		message := string(buf[1:n])
 
-		var command, id string
-		fmt.Sscanf(message, "%s %s", &command, &id)
-
 		switch messageType {
 		case 1:
+			id := string(buf[1:n])
 			s.HandleRegisterClient(id, addr)
 		case 2:
 			s.HandlePing(addr)
-		case 3: s.HandleMessage(addr,message)
+		case 3:
+			s.HandleMessage(addr, message)
 
-		default : fmt.Println("Unknown message type:",messageType)
+		default:
+			fmt.Println("Unknown message type:", messageType)
 		}
 	}
 }
