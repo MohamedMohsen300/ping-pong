@@ -47,21 +47,27 @@ func (s *Server) HandlePing(addr *net.UDPAddr) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	var foundClient *Client
 	for _, c := range s.clients {
 		if c.Addr.String() == addr.String() {
-			foundClient = c
-			break
+			fmt.Printf("pong to client %s \n", c.ID)
+			msg := "pong"
+			s.conn.WriteToUDP([]byte(msg), addr)
+			return
 		}
 	}
+}
 
-	if foundClient == nil {
-		fmt.Println("client not found tried to ping:", addr)
-		return
+func (s *Server) HandleMessage(addr *net.UDPAddr, message string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, c := range s.clients {
+		if c.Addr.String() == addr.String() {
+			fmt.Printf("Message from client %s: %s\n", c.ID, message)
+			return
+		}
 	}
-
-	msg := fmt.Sprintf("pong from server to client %s", foundClient.ID)
-	s.conn.WriteToUDP([]byte(msg), addr)
+	fmt.Println("Message from unknown client:", addr)
 }
 
 func (s *Server) checkConnection() {
@@ -79,20 +85,20 @@ func (s *Server) checkConnection() {
 
 func (s *Server) MessageFromServerAnyTime() {
 	for {
-		var cmd, id, msg string
-		_, err := fmt.Scanln(&cmd, &id, &msg)
+		var send, id, msg string
+		_, err := fmt.Scanln(&send, &id, &msg)
 		if err != nil {
 			fmt.Println("Error reading input:", err)
 			continue
 		}
 
-		if cmd == "send" {
+		if send == "send" {
 			s.mu.Lock()
 			client := s.clients[id]
 			s.conn.WriteToUDP([]byte(msg), client.Addr)
 			s.mu.Unlock()
 		} else {
-			fmt.Println("Unknown command:", cmd)
+			fmt.Println("Unknown command:", send)
 		}
 	}
 }
@@ -105,27 +111,20 @@ func (s *Server) Start() {
 			fmt.Println("Error reading:", err)
 			continue
 		}
-		message := string(buf[:n])
+		messageType := buf[0]
+		message := string(buf[1:n])
 
-		var cmd, id string
-		fmt.Sscanf(message, "%s %s", &cmd, &id)
+		var command, id string
+		fmt.Sscanf(message, "%s %s", &command, &id)
 
-		switch cmd {
-		case "register":
+		switch messageType {
+		case 1:
 			s.HandleRegisterClient(id, addr)
-		case "ping":
+		case 2:
 			s.HandlePing(addr)
-		default:
-			s.mu.Lock()
-			var clientID string
-			for _, c := range s.clients {
-				if c.Addr.String() == addr.String() {
-					clientID = c.ID
-					break
-				}
-			}
-			s.mu.Unlock()
-			fmt.Printf("Message from client %s: %s\n", clientID, message)
+		case 3: s.HandleMessage(addr,message)
+
+		default : fmt.Println("Unknown message type:",messageType)
 		}
 	}
 }
