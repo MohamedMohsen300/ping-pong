@@ -41,6 +41,7 @@ func (s *Server) HandleRegisterClient(id string, addr *net.UDPAddr) {
 	defer s.mu.Unlock()
 	s.clients[id] = &Client{ID: id, Addr: addr}
 	fmt.Println("Registered client:", id, addr)
+	println(id)
 }
 
 func (s *Server) HandlePing(addr *net.UDPAddr) {
