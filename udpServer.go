@@ -96,7 +96,6 @@ func (s *Server) MessageFromServerAnyTime() {
 			s.mu.Lock()
 			if client, ok := s.clients[id]; ok {
 				s.conn.WriteToUDP([]byte(msg), client.Addr)
-				fmt.Printf("Message sent to client %s: %s\n", id, msg)
 			} else {
 				fmt.Printf("Client %s not found\n", id)
 			}
