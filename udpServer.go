@@ -136,6 +136,7 @@ func (s *Server) Start() {
 
 func main() {
 	server, err := NewServer("173.208.144.109:9000")
+	fmt.Println("server running on port 9000")
 	if err != nil {
 		panic(err)
 	}
