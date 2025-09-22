@@ -94,8 +94,12 @@ func (s *Server) MessageFromServerAnyTime() {
 
 		if send == "send" {
 			s.mu.Lock()
-			client := s.clients[id]
-			s.conn.WriteToUDP([]byte(msg), client.Addr)
+			if client, ok := s.clients[id]; ok {
+				s.conn.WriteToUDP([]byte(msg), client.Addr)
+				fmt.Printf("Message sent to client %s: %s\n", id, msg)
+			} else {
+				fmt.Printf("Client %s not found\n", id)
+			}
 			s.mu.Unlock()
 		} else {
 			fmt.Println("Unknown command:", send)
