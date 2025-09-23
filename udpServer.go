@@ -77,7 +77,7 @@ func (s *Server) checkConnection() {
 		s.mu.Lock()
 		for _, client := range s.clients {
 			now:=time.Now()
-			msg := fmt.Sprintf("%v  --->  %v",now.Format("15:04:05"),client.Addr)
+			msg := fmt.Sprintf("Time %v  --->  Address %v",now.Format("15:04:05"),client.Addr)
 			s.conn.WriteToUDP([]byte(msg), client.Addr)
 		}
 		s.mu.Unlock()
