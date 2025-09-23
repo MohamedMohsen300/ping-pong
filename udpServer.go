@@ -50,7 +50,7 @@ func (s *Server) HandlePing(addr *net.UDPAddr, id string) {
 	for _, c := range s.clients {
 		if c.Addr.String() == addr.String() {
 			fmt.Printf("pong to client %s \n", id)
-			msg := "pong"
+			msg := fmt.Sprintf("%v  --->  %v",time.Now(),addr)
 			s.conn.WriteToUDP([]byte(msg), addr)
 			return
 		}
