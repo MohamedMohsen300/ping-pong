@@ -71,7 +71,7 @@ func (s *Server) HandleMessage(addr *net.UDPAddr, message string) {
 }
 
 func (s *Server) checkConnection() {
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(time.Minute)
 	for {
 		<-ticker.C
 		s.mu.Lock()
