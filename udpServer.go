@@ -50,8 +50,7 @@ func (s *Server) HandlePing(addr *net.UDPAddr, id string) {
 	for _, c := range s.clients {
 		if c.Addr.String() == addr.String() {
 			fmt.Printf("pong to client %s \n", id)
-			now:=time.Now()
-			msg := fmt.Sprintf("%v  --->  %v",now.Format("15:04:05"),addr)
+			msg := "pong"
 			s.conn.WriteToUDP([]byte(msg), addr)
 			return
 		}
@@ -77,7 +76,8 @@ func (s *Server) checkConnection() {
 		<-ticker.C
 		s.mu.Lock()
 		for _, client := range s.clients {
-			msg := fmt.Sprintf("check connection from server to client %s", client.ID)
+			now:=time.Now()
+			msg := fmt.Sprintf("%v  --->  %v",now.Format("15:04:05"),client.Addr)
 			s.conn.WriteToUDP([]byte(msg), client.Addr)
 		}
 		s.mu.Unlock()
