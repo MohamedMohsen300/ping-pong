@@ -87,7 +87,7 @@ func (s *Server) checkConnection() {
 func (s *Server) MessageFromServerAnyTime() {
 	for {
 		var send, id, msg string
-		_, err := fmt.Scanln(&send, &id, &msg)
+		_, err := fmt.Scan(&send, &id, &msg)
 		if err != nil {
 			fmt.Println("Error reading input:", err)
 			continue
