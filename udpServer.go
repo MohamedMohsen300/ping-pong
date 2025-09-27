@@ -71,13 +71,13 @@ func (s *Server) HandleMessage(addr *net.UDPAddr, message string) {
 }
 
 func (s *Server) checkConnection() {
-	ticker := time.NewTicker(10*time.Minute)
+	ticker := time.NewTicker(10 * time.Minute)
 	for {
 		<-ticker.C
 		s.mu.Lock()
 		for _, client := range s.clients {
-			now:=time.Now()
-			msg := fmt.Sprintf("Time %v  --->  Address %v",now.Format("15:04:05"),client.Addr)
+			now := time.Now()
+			msg := fmt.Sprintf("Time %v  --->  Address %v", now.Format("15:04:05"), client.Addr)
 			s.conn.WriteToUDP([]byte(msg), client.Addr)
 		}
 		s.mu.Unlock()
@@ -108,7 +108,7 @@ func (s *Server) MessageFromServerAnyTime() {
 }
 
 func (s *Server) Start() {
-	buf := make([]byte, 1024)
+	buf := make([]byte, 65507)
 	for {
 		n, addr, err := s.conn.ReadFromUDP(buf)
 		if err != nil {
@@ -135,6 +135,7 @@ func (s *Server) Start() {
 }
 
 func main() {
+	//173.208.144.109
 	server, err := NewServer("173.208.144.109:9000")
 	fmt.Println("server running on port 9000")
 	if err != nil {
@@ -144,3 +145,5 @@ func main() {
 	go server.MessageFromServerAnyTime()
 	server.Start()
 }
+
+// change address
