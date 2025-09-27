@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
@@ -96,7 +97,10 @@ func (s *Server) MessageFromServerAnyTime() {
 		if send == "send" {
 			s.mu.Lock()
 			if client, ok := s.clients[id]; ok {
-				s.conn.WriteToUDP([]byte(msg), client.Addr)
+				if msg == "s" {
+					text := strings.Repeat("A", 65506)
+					s.conn.WriteToUDP([]byte(text), client.Addr)
+				}
 			} else {
 				fmt.Printf("Client %s not found\n", id)
 			}
