@@ -114,13 +114,12 @@ func (s *Server) MessageFromServerAnyTime() {
 				if msg == "s" {
 					t := time.Now().Format(time.RFC3339Nano)
 					fmt.Println(len(t))
-					text := strings.Repeat("A", 65000)
+					text := strings.Repeat("A", 40000)
 					fmt.Println(len(text))
 					message := fmt.Sprintf("%s|%s", t, text)
 					fmt.Println(len(message))
 					s.conn.WriteToUDP([]byte(message), client.Addr)
 					fmt.Println("done")
-
 				}
 			} else {
 				fmt.Printf("Client %s not found\n", id)
