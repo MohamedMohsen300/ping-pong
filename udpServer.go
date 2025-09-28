@@ -112,7 +112,7 @@ func (s *Server) handlePacket(addr *net.UDPAddr, data []byte) {
 func (s *Server) MessageFromServerAnyTime() {
 	for {
 		var send, id, msg string
-		_, err := fmt.Scan(&send, &id, &msg)
+		_, err := fmt.Scanln(&send, &id, &msg)
 		if err != nil {
 			fmt.Println("Error reading input:", err)
 			continue
@@ -147,7 +147,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	
+
 	fmt.Println("Server running on port 9000")
 	server.Start()
 }
