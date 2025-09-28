@@ -102,7 +102,7 @@ func (s *Server) checkConnection() {
 func (s *Server) MessageFromServerAnyTime() {
 	for {
 		var send, id, msg string
-		_, err := fmt.Scan(&send, &id, &msg)
+		_, err := fmt.Scanln(&send, &id, &msg)
 		if err != nil {
 			fmt.Println("Error reading input:", err)
 			continue
@@ -119,6 +119,8 @@ func (s *Server) MessageFromServerAnyTime() {
 					message := fmt.Sprintf("%s|%s", t, text)
 					fmt.Println(len(message))
 					s.conn.WriteToUDP([]byte(message), client.Addr)
+					fmt.Println("done")
+
 				}
 			} else {
 				fmt.Printf("Client %s not found\n", id)
