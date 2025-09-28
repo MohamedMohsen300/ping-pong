@@ -126,6 +126,8 @@ func (s *Server) MessageFromServerAnyTime() {
 				fmt.Printf("Client %s not found\n", id)
 			}
 			s.mu.Unlock()
+		}else{
+			fmt.Println("Unknown command")
 		}
 	}
 }
