@@ -114,7 +114,7 @@ func (s *Server) MessageFromServerAnyTime() {
 				if msg == "s" {
 					t := time.Now().Format(time.RFC3339Nano)
 					fmt.Println(len(t))
-					text := strings.Repeat("A", 40000)
+					text := strings.Repeat("A", 1500)
 					fmt.Println(len(text))
 					message := fmt.Sprintf("%s|%s", t, text)
 					fmt.Println(len(message))
