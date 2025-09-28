@@ -112,8 +112,10 @@ func (s *Server) MessageFromServerAnyTime() {
 			s.mu.Lock()
 			if client, ok := s.clients[id]; ok {
 				if msg == "s" {
-					text := strings.Repeat("A", 65500)
-					s.conn.WriteToUDP([]byte(text), client.Addr)
+					t := time.Now().Format(time.RFC3339Nano)
+					text := strings.Repeat("A", 65000)
+					message := fmt.Sprintf("%s|%s", t, text)
+					s.conn.WriteToUDP([]byte(message), client.Addr)
 				}
 			} else {
 				fmt.Printf("Client %s not found\n", id)
