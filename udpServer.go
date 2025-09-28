@@ -3,9 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
-	"strings"
 	"sync"
-	"time"
 )
 
 const (
@@ -14,19 +12,26 @@ const (
 	_message  = 3
 )
 
+type Job struct {
+	Addr    *net.UDPAddr
+	Payload []byte
+}
+
 type Client struct {
 	ID   string
 	Addr *net.UDPAddr
 }
 
 type Server struct {
-	conn    *net.UDPConn
-	clients map[string]*Client
-	mu      sync.Mutex
+	conn          *net.UDPConn
+	clientsByID   map[string]*Client
+	clientsByAddr map[string]*Client
+	mu            sync.Mutex
+	writeQueue    chan Job
 }
 
-func NewServer(port_server string) (*Server, error) {
-	addr, err := net.ResolveUDPAddr("udp", port_server)
+func NewServer(server string) (*Server, error) {
+	addr, err := net.ResolveUDPAddr("udp", server)
 	if err != nil {
 		return nil, err
 	}
@@ -37,90 +42,25 @@ func NewServer(port_server string) (*Server, error) {
 	}
 
 	s := &Server{
-		conn:    conn,
-		clients: make(map[string]*Client),
+		conn:          conn,
+		clientsByID:   make(map[string]*Client),
+		clientsByAddr: make(map[string]*Client),
+		writeQueue:    make(chan Job, 100),
 	}
 	return s, nil
 }
 
-func (s *Server) HandleRegisterClient(id string, addr *net.UDPAddr) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.clients[id] = &Client{ID: id, Addr: addr}
-	fmt.Println("Registered client:", id, addr)
-}
-
-func (s *Server) HandlePing(addr *net.UDPAddr, id string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	for _, c := range s.clients {
-		if c.Addr.String() == addr.String() {
-			fmt.Printf("pong to client %s \n", id)
-			msg := "pong"
-			s.conn.WriteToUDP([]byte(msg), addr)
-			return
-		}
-	}
-}
-
-func (s *Server) HandleMessage(addr *net.UDPAddr, message string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	//
-	parts := strings.SplitN(message, "|", 2)
-	if len(parts) != 2 {
-		fmt.Println("Invalid message format:", message)
-		return
-	}
-	time_str := parts[0]
-	msg := parts[1]
-
-	_time, _ := time.Parse(time.RFC3339Nano, time_str)
-
-	time_taking := time.Since(_time)
-	//
-	for _, c := range s.clients {
-		if c.Addr.String() == addr.String() {
-			fmt.Printf("Message from client %s: %s (time taking: %v)\n", c.ID, msg, time_taking)
-			fmt.Println("Done, size of msg is ", len(msg))
-			return
-		}
-	}
-	fmt.Println("Message from unknown client:", addr)
-}
-
-func (s *Server) MessageFromServerAnyTime() {
+func (s *Server) writerWorker(id int) {
 	for {
-		var send, id, msg string
-		_, err := fmt.Scanln(&send, &id, &msg)
+		job := <-s.writeQueue
+		_, err := s.conn.WriteToUDP(job.Payload, job.Addr)
 		if err != nil {
-			fmt.Println("Error reading input:", err)
-			continue
-		}
-
-		if send == "send" {
-			s.mu.Lock()
-			if client, ok := s.clients[id]; ok {
-				if msg == "s" {
-					t := time.Now().Format(time.RFC3339Nano)
-					text := strings.Repeat("A", 65000)
-					message := fmt.Sprintf("%s|%s", t, text)
-					s.conn.WriteToUDP([]byte(message), client.Addr)
-				} else {
-					s.conn.WriteToUDP([]byte(msg), client.Addr)
-				}
-			} else {
-				fmt.Printf("Client %s not found\n", id)
-			}
-			s.mu.Unlock()
-		} else {
-			fmt.Println("Unknown command:", send)
+			fmt.Printf("Writer %d error: %v\n", id, err)
 		}
 	}
 }
 
-func (s *Server) Start() {
+func (s *Server) readerWorker() {
 	buf := make([]byte, 65507)
 	for {
 		n, addr, err := s.conn.ReadFromUDP(buf)
@@ -128,23 +68,77 @@ func (s *Server) Start() {
 			fmt.Println("Error reading:", err)
 			continue
 		}
-		messageType := buf[0]
-		message := string(buf[1:n])
+		s.handlePacket(addr, buf[:n])
+	}
+}
 
-		switch messageType {
-		case _register:
-			id := string(buf[1:n])
-			s.HandleRegisterClient(id, addr)
-		case _ping:
-			id := string(buf[1:n])
-			s.HandlePing(addr, id)
-		case _message:
-			s.HandleMessage(addr, message)
+func (s *Server) handlePacket(addr *net.UDPAddr, data []byte) {
+	if len(data) ==0 {
+		return
+	}
+	msgType := data[0]
+	payload := data[1:]
 
-		default:
-			fmt.Println("Unknown message type:", messageType)
+	switch msgType {
+	case _register:
+		id := string(payload)
+		client := &Client{ID: id, Addr: addr}
+		s.mu.Lock()
+		s.clientsByID[id] = client
+		s.clientsByAddr[addr.String()] = client
+		s.mu.Unlock()
+		fmt.Println("Registered client:", id, addr)
+
+	case _ping:
+		client, ok := s.clientsByAddr[addr.String()]
+		if !ok {
+			fmt.Println("Ping from unknown client:", addr)
+			return
+		}
+		fmt.Printf("Ping from %s\n", client.ID)
+		resp := []byte("pong")
+		s.writeQueue <- Job{Addr: addr, Payload: resp}
+
+	case _message:
+		client, ok := s.clientsByAddr[addr.String()]
+		if !ok {
+			fmt.Println("Message from unknown client:", addr)
+			return
+		}
+		fmt.Printf("Message from %s: %s\n", client.ID, string(payload))
+	}
+}
+
+func (s *Server) MessageFromServerAnyTime() {
+	for {
+		var send, id, msg string
+		_, err := fmt.Scan(&send, &id, &msg)
+		if err != nil {
+			fmt.Println("Error reading input:", err)
+			continue
+		}
+
+		if send == "send" {
+			s.mu.Lock()
+			if client, ok := s.clientsByID[id]; ok {
+				s.writeQueue <- Job{Addr: client.Addr, Payload: []byte(msg)}
+			} else {
+				fmt.Printf("Client %s not found\n", id)
+			}
+			s.mu.Unlock()
 		}
 	}
+}
+
+func (s *Server) Start() {
+	for i := 1; i <= 3; i++ {
+		go s.writerWorker(i)
+	}
+
+	go s.readerWorker()
+	go s.MessageFromServerAnyTime()
+
+	select {}
 }
 
 func main() {
@@ -153,9 +147,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
-	fmt.Println("server running on port 9000")
-
-	go server.MessageFromServerAnyTime()
+	
+	fmt.Println("Server running on port 9000")
 	server.Start()
 }
