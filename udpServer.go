@@ -62,10 +62,23 @@ func (s *Server) HandlePing(addr *net.UDPAddr, id string) {
 func (s *Server) HandleMessage(addr *net.UDPAddr, message string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	//
+	parts := strings.SplitN(message, "|", 2)
+	if len(parts) != 2 {
+		fmt.Println("Invalid message format:", message)
+		return
+	}
+	time_str := parts[0]
+	msg := parts[1]
 
+	_time, _ := time.Parse(time.RFC3339Nano, time_str)
+
+	time_taking := time.Since(_time)
+	//
 	for _, c := range s.clients {
 		if c.Addr.String() == addr.String() {
-			fmt.Printf("Message from client %s: %s\n", c.ID, message)
+			fmt.Printf("Message from client %s: %s (time taking: %v)\n", c.ID, msg, time_taking)
+			fmt.Println("Done, size of msg is ", len(msg))
 			return
 		}
 	}
@@ -99,7 +112,7 @@ func (s *Server) MessageFromServerAnyTime() {
 			s.mu.Lock()
 			if client, ok := s.clients[id]; ok {
 				if msg == "s" {
-					text := strings.Repeat("A", 65506)
+					text := strings.Repeat("A", 65500)
 					s.conn.WriteToUDP([]byte(text), client.Addr)
 				}
 			} else {
