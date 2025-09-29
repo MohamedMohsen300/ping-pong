@@ -82,16 +82,28 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 
 	switch msgType {
 	case _register:
-		id := string(payload)
+		s.handleRegister(addr,payload)
+
+	case _ping:
+		s.handlePing(addr)
+
+	case _message:
+		s.handleMessage(addr,payload)
+	}
+}
+
+func (s *Server)handleRegister(addr *net.UDPAddr,payload []byte)  {
+	id := string(payload)
 		client := &Client{ID: id, Addr: addr}
 		s.mu.Lock()
 		s.clientsByID[id] = client
 		s.clientsByAddr[addr.String()] = client
 		s.mu.Unlock()
 		fmt.Println("Registered client:", id, addr)
+}
 
-	case _ping:
-		client, ok := s.clientsByAddr[addr.String()]
+func(s *Server)handlePing(addr *net.UDPAddr){
+	client, ok := s.clientsByAddr[addr.String()]
 		if !ok {
 			fmt.Println("Ping from unknown client:", addr)
 			return
@@ -99,15 +111,15 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 		fmt.Printf("Ping from %s\n", client.ID)
 		resp := []byte("pong")
 		s.writeQueue <- Job{Addr: addr, Payload: resp}
+}
 
-	case _message:
-		client, ok := s.clientsByAddr[addr.String()]
+func (s *Server)handleMessage(addr *net.UDPAddr,payload []byte)  {
+	client, ok := s.clientsByAddr[addr.String()]
 		if !ok {
 			fmt.Println("Message from unknown client:", addr)
 			return
 		}
 		fmt.Printf("Message from %s: %s\n", client.ID, string(payload))
-	}
 }
 
 func (s *Server) MessageFromServerAnyTime() {
