@@ -68,16 +68,17 @@ func (s *Server) readerWorker() {
 			fmt.Println("Error reading:", err)
 			continue
 		}
-		s.PacketParser(addr, buf[:n])
+		packet:=buf[:n]
+		s.PacketParser(addr, packet)
 	}
 }
 
-func (s *Server) PacketParser(addr *net.UDPAddr, data []byte) {
-	if len(data) ==0 {
+func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
+	if len(packet) ==0 {
 		return
 	}
-	msgType := data[0]
-	payload := data[1:]
+	msgType := packet[0]
+	payload := packet[1:]
 
 	switch msgType {
 	case _register:
