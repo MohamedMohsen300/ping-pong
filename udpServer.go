@@ -1,15 +1,19 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
+	"math/rand"
 	"net"
 	"sync"
+	"time"
 )
 
 const (
 	_register = 1
 	_ping     = 2
 	_message  = 3
+	_ack      = 4
 )
 
 type Job struct {
@@ -23,11 +27,12 @@ type Client struct {
 }
 
 type Server struct {
-	conn          *net.UDPConn
-	clientsByID   map[string]*Client
-	clientsByAddr map[string]*Client
-	mu            sync.Mutex
-	writeQueue    chan Job
+	conn           *net.UDPConn
+	clientsByID    map[string]*Client
+	clientsByAddr  map[string]*Client
+	mu             sync.Mutex
+	writeQueue     chan Job
+	pendingPackets map[uint16]Job
 }
 
 func NewServer(server string) (*Server, error) {
@@ -42,10 +47,11 @@ func NewServer(server string) (*Server, error) {
 	}
 
 	s := &Server{
-		conn:          conn,
-		clientsByID:   make(map[string]*Client),
-		clientsByAddr: make(map[string]*Client),
-		writeQueue:    make(chan Job, 100),
+		conn:           conn,
+		clientsByID:    make(map[string]*Client),
+		clientsByAddr:  make(map[string]*Client),
+		writeQueue:     make(chan Job, 100),
+		pendingPackets: make(map[uint16]Job),
 	}
 	return s, nil
 }
@@ -73,22 +79,57 @@ func (s *Server) udpReadWorker() {
 	}
 }
 
+func (s *Server) fieldPacketTrackingWorker() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		s.mu.Lock()
+		for packetID, job := range s.pendingPackets {
+			fmt.Printf("Retransmitting packet %d\n", packetID)
+			s.writeQueue <- job
+		}
+		s.mu.Unlock()
+	}
+}
+
+func (s *Server) packetGenerator(addr *net.UDPAddr, msgType byte, payload []byte) {
+	packet := make([]byte, 2+2+1+len(payload))
+
+	rand.Seed(time.Now().UnixNano())
+	packetID := uint16(rand.Intn(65535))
+	binary.BigEndian.PutUint16(packet[0:2], packetID)
+
+	enc_dec := uint16(0)
+	binary.BigEndian.PutUint16(packet[2:4], enc_dec)
+	packet[4] = msgType
+
+	copy(packet[5:], payload)
+
+	s.pendingPackets[packetID] = Job{Addr: addr, Payload: packet}
+
+	s.writeQueue <- Job{Addr: addr, Payload: packet}
+}
+
 func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
-	if len(packet) == 0 {
+	if len(packet) < 5 {
 		return
 	}
-	msgType := packet[0]
-	payload := packet[1:]
+
+	packetID := binary.BigEndian.Uint16(packet[0:2])
+	// enc_dec := binary.BigEndian.Uint16(packet[2:4])
+	msgType := packet[4]
+	payload := packet[5:]
 
 	switch msgType {
 	case _register:
 		s.handleRegister(addr, payload)
-
 	case _ping:
 		s.handlePing(addr)
-
 	case _message:
 		s.handleMessage(addr, payload)
+	case _ack:
+		s.handleAck(packetID)
 	}
 }
 
@@ -109,8 +150,7 @@ func (s *Server) handlePing(addr *net.UDPAddr) {
 		return
 	}
 	fmt.Printf("Ping from %s\n", client.ID)
-	resp := []byte("pong")
-	s.writeQueue <- Job{Addr: addr, Payload: resp}
+	s.packetGenerator(addr, _ping, []byte("pong"))
 }
 
 func (s *Server) handleMessage(addr *net.UDPAddr, payload []byte) {
@@ -120,6 +160,13 @@ func (s *Server) handleMessage(addr *net.UDPAddr, payload []byte) {
 		return
 	}
 	fmt.Printf("Message from %s: %s\n", client.ID, string(payload))
+}
+
+func (s *Server) handleAck(packetID uint16) {
+	s.mu.Lock()
+	delete(s.pendingPackets, packetID)
+	s.mu.Unlock()
+	fmt.Printf("ACK received for packet %d\n", packetID)
 }
 
 func (s *Server) MessageFromServerAnyTime() {
@@ -134,7 +181,7 @@ func (s *Server) MessageFromServerAnyTime() {
 		if send == "send" {
 			s.mu.Lock()
 			if client, ok := s.clientsByID[id]; ok {
-				s.writeQueue <- Job{Addr: client.Addr, Payload: []byte(msg)}
+				s.packetGenerator(client.Addr, _message, []byte(msg))
 			} else {
 				fmt.Printf("Client %s not found\n", id)
 			}
@@ -151,13 +198,12 @@ func (s *Server) Start() {
 	}
 
 	go s.udpReadWorker()
+	go s.fieldPacketTrackingWorker()
 	go s.MessageFromServerAnyTime()
-
 	select {}
 }
 
 func main() {
-	//173.208.144.109
 	server, err := NewServer("173.208.144.109:9000")
 	if err != nil {
 		panic(err)
