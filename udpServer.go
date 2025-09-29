@@ -68,13 +68,13 @@ func (s *Server) readerWorker() {
 			fmt.Println("Error reading:", err)
 			continue
 		}
-		packet:=buf[:n]
+		packet := buf[:n]
 		s.PacketParser(addr, packet)
 	}
 }
 
 func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
-	if len(packet) ==0 {
+	if len(packet) == 0 {
 		return
 	}
 	msgType := packet[0]
@@ -127,7 +127,7 @@ func (s *Server) MessageFromServerAnyTime() {
 				fmt.Printf("Client %s not found\n", id)
 			}
 			s.mu.Unlock()
-		}else{
+		} else {
 			fmt.Println("Unknown command")
 		}
 	}
