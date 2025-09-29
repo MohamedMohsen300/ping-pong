@@ -50,7 +50,7 @@ func NewServer(server string) (*Server, error) {
 	return s, nil
 }
 
-func (s *Server) writerWorker(id int) {
+func (s *Server) udpWriteWorker(id int) {
 	for {
 		job := <-s.writeQueue
 		_, err := s.conn.WriteToUDP(job.Payload, job.Addr)
@@ -60,7 +60,7 @@ func (s *Server) writerWorker(id int) {
 	}
 }
 
-func (s *Server) readerWorker() {
+func (s *Server) udpReadWorker() {
 	buf := make([]byte, 65507)
 	for {
 		n, addr, err := s.conn.ReadFromUDP(buf)
@@ -135,10 +135,10 @@ func (s *Server) MessageFromServerAnyTime() {
 
 func (s *Server) Start() {
 	for i := 1; i <= 3; i++ {
-		go s.writerWorker(i)
+		go s.udpWriteWorker(i)
 	}
 
-	go s.readerWorker()
+	go s.udpReadWorker()
 	go s.MessageFromServerAnyTime()
 
 	select {}
