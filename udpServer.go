@@ -68,11 +68,11 @@ func (s *Server) readerWorker() {
 			fmt.Println("Error reading:", err)
 			continue
 		}
-		s.handlePacket(addr, buf[:n])
+		s.PacketParser(addr, buf[:n])
 	}
 }
 
-func (s *Server) handlePacket(addr *net.UDPAddr, data []byte) {
+func (s *Server) PacketParser(addr *net.UDPAddr, data []byte) {
 	if len(data) ==0 {
 		return
 	}
