@@ -148,7 +148,9 @@ func (s *Server) packetGenerator(addr *net.UDPAddr, msgType byte, payload []byte
 	binary.BigEndian.PutUint16(packet[2:4], enc_dec)
 	packet[4] = msgType
 
-	copy(packet[5:], payload)
+	if msgType != _ack{
+		copy(packet[5:], payload)
+	}
 
 	if isRequest {
 		s.mux <- Mutex{Action: "addPending", PacketID: packetID, Addr: addr, Packet: packet}
@@ -181,6 +183,7 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 func (s *Server) handleRegister(addr *net.UDPAddr, payload []byte) {
 	id := string(payload)
 	s.mux <- Mutex{Action: "registration", Addr: addr, Id: id}
+	s.packetGenerator(addr,_ack,nil,false)
 	fmt.Println("Registered client:", id, addr)
 }
 
