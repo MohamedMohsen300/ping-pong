@@ -136,7 +136,7 @@ func (s *Server) packetParserWorker() {
 
 //
 
-func (s *Server) packetGenerator(addr *net.UDPAddr, msgType byte, payload []byte,isRequest bool) {
+func (s *Server) packetGenerator(addr *net.UDPAddr, msgType byte, payload []byte, isRequest bool) {
 	packet := make([]byte, 2+2+1+len(payload))
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -183,6 +183,7 @@ func (s *Server) handleRegister(addr *net.UDPAddr, payload []byte) {
 	s.mux <- Mutex{Action: "registration", Addr: addr, Id: id}
 	fmt.Println("Registered client:", id, addr)
 }
+
 // out pending
 func (s *Server) handlePing(addr *net.UDPAddr) {
 	reply := make(chan interface{})
@@ -194,7 +195,7 @@ func (s *Server) handlePing(addr *net.UDPAddr) {
 		return
 	}
 	fmt.Printf("Ping from %s\n", client.ID)
-	s.packetGenerator(addr, _ping, []byte("pong"),false)
+	s.packetGenerator(addr, _ping, []byte("pong"), false)
 }
 
 func (s *Server) handleMessage(addr *net.UDPAddr, payload []byte) {
@@ -214,6 +215,7 @@ func (s *Server) handleAck(packetID uint16) {
 	s.mux <- Mutex{Action: "deletePending", PacketID: packetID}
 	fmt.Printf("ACK received for packet %d\n", packetID)
 }
+
 // in pending
 func (s *Server) MessageFromServerAnyTime() {
 	for {
@@ -230,7 +232,7 @@ func (s *Server) MessageFromServerAnyTime() {
 			client, _ := (<-reply).(*Client)
 
 			if client != nil {
-				s.packetGenerator(client.Addr, _message, []byte(msg),true)
+				s.packetGenerator(client.Addr, _message, []byte(msg), true)
 			} else {
 				fmt.Printf("Client %s not found\n", id)
 			}
