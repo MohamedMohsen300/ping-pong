@@ -150,8 +150,9 @@ func (s *Server) packetGenerator(addr *net.UDPAddr, msgType byte, payload []byte
 
 	copy(packet[5:], payload)
 
-	s.mux <- Mutex{Action: "addPending", PacketID: packetID, Addr: addr, Packet: packet}
-
+	if msgType != _register {
+		s.mux <- Mutex{Action: "addPending", PacketID: packetID, Addr: addr, Packet: packet}
+	}
 	s.writeQueue <- Job{Addr: addr, Packet: packet}
 }
 
