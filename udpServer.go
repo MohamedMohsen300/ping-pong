@@ -213,7 +213,6 @@ func (s *Server) handleMessage(addr *net.UDPAddr, payload []byte) {
 
 func (s *Server) handleAck(packetID uint16) {
 	s.mux <- Mutex{Action: "deletePending", PacketID: packetID}
-	fmt.Printf("ACK received for packet %d\n", packetID)
 }
 // in pending
 func (s *Server) MessageFromServerAnyTime() {
