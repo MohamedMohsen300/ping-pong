@@ -139,8 +139,9 @@ func (s *Server) packetParserWorker() {
 func (s *Server) packetGenerator(addr *net.UDPAddr, msgType byte, payload []byte) {
 	packet := make([]byte, 2+2+1+len(payload))
 
-	rand.Seed(time.Now().UnixNano())
-	packetID := uint16(rand.Intn(65535))
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	packetID := uint16(r.Intn(65535))
+
 	binary.BigEndian.PutUint16(packet[0:2], packetID)
 
 	enc_dec := uint16(0)
@@ -276,7 +277,7 @@ func (s *Server) MutexHandleActions() {
 
 func (s *Server) Start() {
 	go s.MutexHandleActions()
-	
+
 	for i := 1; i <= 3; i++ {
 		go s.udpWriteWorker(i)
 	}
