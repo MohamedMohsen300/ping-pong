@@ -18,7 +18,7 @@ const (
 
 type Job struct {
 	Addr    *net.UDPAddr
-	Payload []byte
+	Packet []byte
 }
 
 type Client struct {
@@ -33,6 +33,7 @@ type Server struct {
 	mu             sync.Mutex
 	writeQueue     chan Job
 	pendingPackets map[uint16]Job
+	parseQueue     chan Job
 }
 
 func NewServer(server string) (*Server, error) {
@@ -52,6 +53,7 @@ func NewServer(server string) (*Server, error) {
 		clientsByAddr:  make(map[string]*Client),
 		writeQueue:     make(chan Job, 100),
 		pendingPackets: make(map[uint16]Job),
+		parseQueue:     make(chan Job, 100),
 	}
 	return s, nil
 }
@@ -59,7 +61,7 @@ func NewServer(server string) (*Server, error) {
 func (s *Server) udpWriteWorker(id int) {
 	for {
 		job := <-s.writeQueue
-		_, err := s.conn.WriteToUDP(job.Payload, job.Addr)
+		_, err := s.conn.WriteToUDP(job.Packet, job.Addr)
 		if err != nil {
 			fmt.Printf("Writer %d error: %v\n", id, err)
 		}
@@ -74,8 +76,9 @@ func (s *Server) udpReadWorker() {
 			fmt.Println("Error reading:", err)
 			continue
 		}
-		packet := buf[:n]
-		s.PacketParser(addr, packet)
+		packet := make([]byte, n)
+		copy(packet, buf[:n])
+		s.parseQueue <- Job{Addr: addr, Packet: packet}
 	}
 }
 
@@ -93,6 +96,13 @@ func (s *Server) fieldPacketTrackingWorker() {
 	}
 }
 
+func (s *Server) packetParserWorker() {
+	for {
+		job := <- s.parseQueue
+		s.PacketParser(job.Addr, job.Packet)
+	}
+}
+
 func (s *Server) packetGenerator(addr *net.UDPAddr, msgType byte, payload []byte) {
 	packet := make([]byte, 2+2+1+len(payload))
 
@@ -106,9 +116,9 @@ func (s *Server) packetGenerator(addr *net.UDPAddr, msgType byte, payload []byte
 
 	copy(packet[5:], payload)
 
-	s.pendingPackets[packetID] = Job{Addr: addr, Payload: packet}
+	s.pendingPackets[packetID] = Job{Addr: addr, Packet: packet}
 
-	s.writeQueue <- Job{Addr: addr, Payload: packet}
+	s.writeQueue <- Job{Addr: addr, Packet: packet}
 }
 
 func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
@@ -198,6 +208,11 @@ func (s *Server) Start() {
 	}
 
 	go s.udpReadWorker()
+
+	for i := 1; i <= 3; i++ {
+		go s.packetParserWorker()
+	}
+
 	go s.fieldPacketTrackingWorker()
 	go s.MessageFromServerAnyTime()
 	select {}
@@ -212,3 +227,5 @@ func main() {
 	fmt.Println("Server running on port 9000")
 	server.Start()
 }
+
+// conf -> .env // use channal for packetParser_With_udpReadWorker // copy job in PacketJob and set (addr,packet,LastTimeSend) // mutex // try send photo from client to server  (2 MB)
