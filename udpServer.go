@@ -171,7 +171,7 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 	case _message:
 		s.handleMessage(addr, payload, packetID)
 	case _ack:
-		s.handleAck(packetID,payload)
+		s.handleAck(packetID, payload)
 	}
 }
 
@@ -208,7 +208,7 @@ func (s *Server) handleMessage(addr *net.UDPAddr, payload []byte, clientAckPacke
 	fmt.Printf("Message from %s: %s\n", client.ID, string(payload))
 }
 
-func (s *Server) handleAck(packetID uint16,payload []byte) {
+func (s *Server) handleAck(packetID uint16, payload []byte) {
 	fmt.Println("Client:", string(payload))
 	s.mux <- Mutex{Action: "deletePending", PacketID: packetID}
 }
