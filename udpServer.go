@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+
 	// "strconv"
 	// "strings"
 	"sync"
@@ -54,9 +55,8 @@ type Server struct {
 	pendingPackets map[uint16]pendingPacketsJob
 	parseQueue     chan Job
 	mux            chan Mutex
-	// file send tracking (fileID -> state)
-	fileSendLock sync.Mutex
-	fileSends     map[uint32]struct{} // basic marker that metadata ACK received
+	fileSendLock   sync.Mutex
+	fileSends      map[uint32]struct{} // basic marker that metadata ACK received
 }
 
 func NewServer(server string) (*Server, error) {
@@ -104,28 +104,23 @@ func (s *Server) udpReadWorker() {
 	}
 }
 
-// returns packetID for non-ACK packets; for ACK it returns 0
 func (s *Server) packetGenerator(addr *net.UDPAddr, msgType byte, payload []byte, clientAckPacketId uint16) uint16 {
 	packet := make([]byte, 2+2+1+len(payload))
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	packetID := uint16(r.Intn(0xFFFF))
-	// enc flag
+	packetID := uint16(r.Intn(65535))
+
 	binary.BigEndian.PutUint16(packet[2:4], 0)
-	// msg type
+
 	packet[4] = msgType
-	// payload
 	copy(packet[5:], payload)
 
 	if msgType != _ack {
 		binary.BigEndian.PutUint16(packet[0:2], packetID)
-		// store pending via mux
 		s.mux <- Mutex{Action: "addPending", PacketID: packetID, Addr: addr, Packet: packet}
 	} else {
-		// when sending ACK echo the provided clientAckPacketId
 		binary.BigEndian.PutUint16(packet[0:2], clientAckPacketId)
 	}
 
-	// push to writer
 	s.writeQueue <- Job{Addr: addr, Packet: packet}
 	if msgType != _ack {
 		return packetID
@@ -140,7 +135,7 @@ func (s *Server) packetParserWorker() {
 }
 
 func (s *Server) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(3 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
 		now := time.Now()
@@ -149,9 +144,8 @@ func (s *Server) fieldPacketTrackingWorker() {
 		pendings := (<-reply).(map[uint16]pendingPacketsJob)
 		for packetID, pending := range pendings {
 			if now.Sub(pending.LastSend) >= 10*time.Second {
-				fmt.Printf("[tracker] Retransmitting packet %d\n", packetID)
+				fmt.Printf("Retransmitting packet %d\n", packetID)
 				s.writeQueue <- pending.Job
-				// refresh lastsend via mux
 				s.mux <- Mutex{
 					Action:   "addPending",
 					PacketID: packetID,
@@ -254,10 +248,8 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 	case _ack:
 		s.handleAck(packetID, payload)
 	case _metadata:
-		// metadata from client? (this example assumes server sends metadata)
-		fmt.Println("[server] got metadata (unexpected) from", addr)
+		fmt.Println("[server: got metadata (unexpected) from", addr)
 	case _chunk:
-		// chunk from client? (server not expecting in this direction for now)
 		fmt.Println("[server] got chunk (unexpected) from", addr)
 	}
 }
@@ -294,12 +286,10 @@ func (s *Server) handleMessage(addr *net.UDPAddr, payload []byte, clientAckPacke
 }
 
 func (s *Server) handleAck(packetID uint16, payload []byte) {
-	// payload may contain info, but we just delete pending
-	fmt.Println("[server] ack payload:", string(payload))
+	fmt.Println("Client:", string(payload))
 	s.mux <- Mutex{Action: "deletePending", PacketID: packetID}
 }
 
-// MutexHandleActions serializes access to maps
 func (s *Server) MutexHandleActions() {
 	for mu := range s.mux {
 		switch mu.Action {
@@ -321,35 +311,38 @@ func (s *Server) MutexHandleActions() {
 		case "deletePending":
 			delete(s.pendingPackets, mu.PacketID)
 		case "getAllPending":
-			cp := make(map[uint16]pendingPacketsJob)
+			pending := make(map[uint16]pendingPacketsJob)
 			for k, v := range s.pendingPackets {
-				cp[k] = v
+				pending[k] = v
 			}
-			mu.Reply <- cp
+			mu.Reply <- pending
 		}
 	}
 }
 
 func (s *Server) MessageFromServerAnyTime() {
 	for {
-		var cmd, arg1, arg2 string
-		_, err := fmt.Scanln(&cmd, &arg1, &arg2)
+		var send, id, data string
+		_, err := fmt.Scanln(&send, &id, &data)
 		if err != nil {
 			fmt.Println("input read error:", err)
 			continue
 		}
-		if cmd == "sendfile" {
-			// usage: sendfile <clientID> <filepath>
-			reply := make(chan interface{})
-			s.mux <- Mutex{Action: "clientByID", Id: arg1, Reply: reply}
-			client := (<-reply).(*Client)
-			if client == nil {
-				fmt.Println("client not found:", arg1)
-				continue
-			}
-			chunkSize := 60 * 1024
+
+		reply := make(chan interface{})
+		s.mux <- Mutex{Action: "clientByID", Id: id, Reply: reply}
+		client := (<-reply).(*Client)
+		if client == nil {
+			fmt.Printf("Client %s not found\n", id)
+			continue
+		}
+
+		if send == "send" {
+			s.packetGenerator(client.Addr, _message, []byte(data), 0)
+		} else if send == "sendfile" {
+			chunkSize := 65000
 			go func() {
-				if err := s.sendFile(client.Addr, arg2, chunkSize); err != nil {
+				if err := s.sendFile(client.Addr, data, chunkSize); err != nil {
 					fmt.Println("sendFile error:", err)
 				}
 			}()
@@ -381,9 +374,3 @@ func main() {
 	fmt.Println("Server running on :9000")
 	server.Start()
 }
-
-//done <--- use channal for packetParser_With_udpReadWorker)
-//done <--- copy job in PacketJob and set (addr,packet,LastTimeSend)
-//done <--- mutex
-//     <--- try send photo from client to server  (2 MB)
-//     <--- conf(.env)
