@@ -72,8 +72,6 @@ func NewServer(server string) (*Server, error) {
 	return s, nil
 }
 
-//Workers
-
 func (s *Server) udpWriteWorker(id int) {
 	for {
 		job := <-s.writeQueue
@@ -134,25 +132,24 @@ func (s *Server) packetParserWorker() {
 	}
 }
 
-//
-
-func (s *Server) packetGenerator(addr *net.UDPAddr, msgType byte, payload []byte, isRequest bool) {
+func (s *Server) packetGenerator(addr *net.UDPAddr, msgType byte, payload []byte, clientAckPacketId uint16) {
 	packet := make([]byte, 2+2+1+len(payload))
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	packetID := uint16(r.Intn(65535))
 
-	binary.BigEndian.PutUint16(packet[0:2], packetID)
-
-	enc_dec := uint16(0)
-	binary.BigEndian.PutUint16(packet[2:4], enc_dec)
+	binary.BigEndian.PutUint16(packet[2:4], 0)
 	packet[4] = msgType
 
 	copy(packet[5:], payload)
 
-	if isRequest {
+	if msgType != _ack {
+		binary.BigEndian.PutUint16(packet[0:2], packetID)
 		s.mux <- Mutex{Action: "addPending", PacketID: packetID, Addr: addr, Packet: packet}
+	} else {
+		binary.BigEndian.PutUint16(packet[0:2], clientAckPacketId)
 	}
+
 	s.writeQueue <- Job{Addr: addr, Packet: packet}
 }
 
@@ -168,34 +165,24 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 
 	switch msgType {
 	case _register:
-		s.sendAck(addr,packetID)
-		s.handleRegister(addr, payload)
+		s.handleRegister(addr, payload, packetID)
 	case _ping:
-		s.handlePing(addr)
+		s.handlePing(addr, packetID)
 	case _message:
-		s.sendAck(addr,packetID)
-		s.handleMessage(addr, payload)
+		s.handleMessage(addr, payload, packetID)
 	case _ack:
 		s.handleAck(packetID)
 	}
 }
 
-func (s *Server) sendAck(addr *net.UDPAddr,packetID uint16) {
-	ack := make([]byte, 5)
-	binary.BigEndian.PutUint16(ack[0:2], packetID)
-	binary.BigEndian.PutUint16(ack[2:4], 0)
-	ack[4] = _ack
-	s.writeQueue <- Job{Addr: addr, Packet: ack}
-}
-
-func (s *Server) handleRegister(addr *net.UDPAddr, payload []byte) {
+func (s *Server) handleRegister(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
 	id := string(payload)
 	s.mux <- Mutex{Action: "registration", Addr: addr, Id: id}
+	s.packetGenerator(addr, _ack, []byte("Registered success"), clientAckPacketId)
 	fmt.Println("Registered client:", id, addr)
 }
 
-// out pending
-func (s *Server) handlePing(addr *net.UDPAddr) {
+func (s *Server) handlePing(addr *net.UDPAddr, clientAckPacketId uint16) {
 	reply := make(chan interface{})
 	s.mux <- Mutex{Action: "clientByAddr", Addr: addr, Reply: reply}
 	client := (<-reply).(*Client)
@@ -204,11 +191,11 @@ func (s *Server) handlePing(addr *net.UDPAddr) {
 		fmt.Println("Ping from unknown client:", addr)
 		return
 	}
+	s.packetGenerator(addr, _ack, []byte("pong"), clientAckPacketId)
 	fmt.Printf("Ping from %s\n", client.ID)
-	s.packetGenerator(addr, _ping, []byte("pong"), false)
 }
 
-func (s *Server) handleMessage(addr *net.UDPAddr, payload []byte) {
+func (s *Server) handleMessage(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
 	reply := make(chan interface{})
 	s.mux <- Mutex{Action: "clientByAddr", Addr: addr, Reply: reply}
 	client := (<-reply).(*Client)
@@ -217,7 +204,7 @@ func (s *Server) handleMessage(addr *net.UDPAddr, payload []byte) {
 		fmt.Println("Message from unknown client:", addr)
 		return
 	}
-
+	s.packetGenerator(addr, _ack, []byte("message received"), clientAckPacketId)
 	fmt.Printf("Message from %s: %s\n", client.ID, string(payload))
 }
 
@@ -225,7 +212,6 @@ func (s *Server) handleAck(packetID uint16) {
 	s.mux <- Mutex{Action: "deletePending", PacketID: packetID}
 }
 
-// in pending
 func (s *Server) MessageFromServerAnyTime() {
 	for {
 		var send, id, msg string
@@ -241,7 +227,7 @@ func (s *Server) MessageFromServerAnyTime() {
 			client, _ := (<-reply).(*Client)
 
 			if client != nil {
-				s.packetGenerator(client.Addr, _message, []byte(msg), true)
+				s.packetGenerator(client.Addr, _message, []byte(msg), 0)
 			} else {
 				fmt.Printf("Client %s not found\n", id)
 			}
@@ -315,8 +301,8 @@ func main() {
 	server.Start()
 }
 
-//     <--- conf(.env)
 //done <--- use channal for packetParser_With_udpReadWorker)
 //done <--- copy job in PacketJob and set (addr,packet,LastTimeSend)
 //done <--- mutex
 //     <--- try send photo from client to server  (2 MB)
+//     <--- conf(.env)
