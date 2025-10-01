@@ -99,7 +99,7 @@ func (s *Server) udpReadWorker() {
 }
 
 func (s *Server) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -136,7 +136,7 @@ func (s *Server) packetParserWorker() {
 
 //
 
-func (s *Server) packetGenerator(addr *net.UDPAddr, msgType byte, payload []byte,isRequest bool) {
+func (s *Server) packetGenerator(addr *net.UDPAddr, msgType byte, payload []byte, isRequest bool) {
 	packet := make([]byte, 2+2+1+len(payload))
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -162,20 +162,30 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 	}
 
 	packetID := binary.BigEndian.Uint16(packet[0:2])
-	// enc_dec := binary.BigEndian.Uint16(packet[2:4])
+	binary.BigEndian.PutUint16(packet[2:4], 0)
 	msgType := packet[4]
 	payload := packet[5:]
 
 	switch msgType {
 	case _register:
+		s.sendAck(addr,packetID)
 		s.handleRegister(addr, payload)
 	case _ping:
 		s.handlePing(addr)
 	case _message:
+		s.sendAck(addr,packetID)
 		s.handleMessage(addr, payload)
 	case _ack:
 		s.handleAck(packetID)
 	}
+}
+
+func (s *Server) sendAck(addr *net.UDPAddr,packetID uint16) {
+	ack := make([]byte, 5)
+	binary.BigEndian.PutUint16(ack[0:2], packetID)
+	binary.BigEndian.PutUint16(ack[2:4], 0)
+	ack[4] = _ack
+	s.writeQueue <- Job{Addr: addr, Packet: ack}
 }
 
 func (s *Server) handleRegister(addr *net.UDPAddr, payload []byte) {
@@ -195,7 +205,7 @@ func (s *Server) handlePing(addr *net.UDPAddr) {
 		return
 	}
 	fmt.Printf("Ping from %s\n", client.ID)
-	s.packetGenerator(addr, _ping, []byte("pong"),false)
+	s.packetGenerator(addr, _ping, []byte("pong"), false)
 }
 
 func (s *Server) handleMessage(addr *net.UDPAddr, payload []byte) {
@@ -214,6 +224,7 @@ func (s *Server) handleMessage(addr *net.UDPAddr, payload []byte) {
 func (s *Server) handleAck(packetID uint16) {
 	s.mux <- Mutex{Action: "deletePending", PacketID: packetID}
 }
+
 // in pending
 func (s *Server) MessageFromServerAnyTime() {
 	for {
@@ -230,7 +241,7 @@ func (s *Server) MessageFromServerAnyTime() {
 			client, _ := (<-reply).(*Client)
 
 			if client != nil {
-				s.packetGenerator(client.Addr, _message, []byte(msg),true)
+				s.packetGenerator(client.Addr, _message, []byte(msg), true)
 			} else {
 				fmt.Printf("Client %s not found\n", id)
 			}
