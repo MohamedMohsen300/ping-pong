@@ -277,7 +277,7 @@ func (s *Server) MessageFromServerAnyTime() {
 		if send == "send" {
 			s.packetGenerator(client.Addr, _message, []byte(msg), 0, nil, nil)
 		} else if send == "sendfile" {
-			err := s.SendFileToClient(id, msg, filepath.Base(msg), 10, 65000)
+			err := s.SendFileToClient(id, msg, filepath.Base(msg), 10, 60000)
 			if err != nil {
 				fmt.Println("SendFile error:", err)
 			}
