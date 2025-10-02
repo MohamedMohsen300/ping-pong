@@ -78,7 +78,8 @@ func NewServer(server string) (*Server, error) {
 }
 
 func (s *Server) udpWriteWorker(id int) {
-	for job := range s.writeQueue {
+	for {
+		job := <-s.writeQueue
 		_, err := s.conn.WriteToUDP(job.Packet, job.Addr)
 		if err != nil {
 			fmt.Printf("Writer %d error: %v\n", id, err)
@@ -350,13 +351,13 @@ func (s *Server) MessageFromServerAnyTime() {
 
 func (s *Server) Start() {
 	go s.MutexHandleActions()
-	
+
 	for i := 1; i <= 3; i++ {
 		go s.udpWriteWorker(i)
 	}
 
 	go s.udpReadWorker()
-	
+
 	for i := 1; i <= 3; i++ {
 		go s.packetParserWorker()
 	}
