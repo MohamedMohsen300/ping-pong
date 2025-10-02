@@ -7,9 +7,6 @@ import (
 	"math/rand"
 	"net"
 	"os"
-
-	// "strconv"
-	// "strings"
 	"sync"
 	"time"
 )
@@ -104,6 +101,29 @@ func (s *Server) udpReadWorker() {
 	}
 }
 
+func (s *Server) fieldPacketTrackingWorker() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		now := time.Now()
+		reply := make(chan interface{})
+		s.mux <- Mutex{Action: "getAllPending", Reply: reply}
+		pendings := (<-reply).(map[uint16]pendingPacketsJob)
+		for packetID, pending := range pendings {
+			if now.Sub(pending.LastSend) >= 10*time.Second {
+				fmt.Printf("Retransmitting packet %d\n", packetID)
+				s.writeQueue <- pending.Job
+				s.mux <- Mutex{
+					Action:   "addPending",
+					PacketID: packetID,
+					Addr:     pending.Addr,
+					Packet:   pending.Packet,
+				}
+			}
+		}
+	}
+}
+
 func (s *Server) packetGenerator(addr *net.UDPAddr, msgType byte, payload []byte, clientAckPacketId uint16) uint16 {
 	packet := make([]byte, 2+2+1+len(payload))
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -134,26 +154,27 @@ func (s *Server) packetParserWorker() {
 	}
 }
 
-func (s *Server) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-	for range ticker.C {
-		now := time.Now()
-		reply := make(chan interface{})
-		s.mux <- Mutex{Action: "getAllPending", Reply: reply}
-		pendings := (<-reply).(map[uint16]pendingPacketsJob)
-		for packetID, pending := range pendings {
-			if now.Sub(pending.LastSend) >= 10*time.Second {
-				fmt.Printf("Retransmitting packet %d\n", packetID)
-				s.writeQueue <- pending.Job
-				s.mux <- Mutex{
-					Action:   "addPending",
-					PacketID: packetID,
-					Addr:     pending.Addr,
-					Packet:   pending.Packet,
-				}
-			}
-		}
+func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
+	if len(packet) < 5 {
+		return
+	}
+	packetID := binary.BigEndian.Uint16(packet[0:2])
+	msgType := packet[4]
+	payload := packet[5:]
+
+	switch msgType {
+	case _register:
+		s.handleRegister(addr, payload, packetID)
+	case _ping:
+		s.handlePing(addr, packetID)
+	case _message:
+		s.handleMessage(addr, payload, packetID)
+	case _ack:
+		s.handleAck(packetID, payload)
+	case _metadata:
+		fmt.Println("[server: got metadata (unexpected) from", addr)
+	case _chunk:
+		fmt.Println("[server] got chunk (unexpected) from", addr)
 	}
 }
 
@@ -174,7 +195,7 @@ func (s *Server) sendFile(addr *net.UDPAddr, filePath string, chunkSize int) err
 	// choose fileID
 	fileID := rand.Uint32()
 
-	// build metadata payload
+	// build metadata
 	nameBytes := []byte(fileName)
 	metaLen := 4 + 2 + len(nameBytes) + 8 + 4 + 4
 	meta := make([]byte, metaLen)
@@ -190,7 +211,7 @@ func (s *Server) sendFile(addr *net.UDPAddr, filePath string, chunkSize int) err
 
 	// send metadata and get packet id
 	metaPktID := s.packetGenerator(addr, _metadata, meta, 0)
-	fmt.Printf("[sendFile] sent metadata (fileID=%d) metaPktID=%d\n", fileID, metaPktID)
+	fmt.Printf("sent metadata (fileID=%d) metaPktID=%d\n", fileID, metaPktID)
 
 	// wait for metadata ACK by polling pending map: when the pending record for metaPktID is deleted, ack arrived
 	for {
@@ -226,32 +247,8 @@ func (s *Server) sendFile(addr *net.UDPAddr, filePath string, chunkSize int) err
 		}(payload)
 	}
 	wg.Wait()
-	fmt.Printf("[sendFile] finished sending fileID=%d\n", fileID)
+	fmt.Printf("finished sending fileID=%d\n", fileID)
 	return nil
-}
-
-func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
-	if len(packet) < 5 {
-		return
-	}
-	packetID := binary.BigEndian.Uint16(packet[0:2])
-	msgType := packet[4]
-	payload := packet[5:]
-
-	switch msgType {
-	case _register:
-		s.handleRegister(addr, payload, packetID)
-	case _ping:
-		s.handlePing(addr, packetID)
-	case _message:
-		s.handleMessage(addr, payload, packetID)
-	case _ack:
-		s.handleAck(packetID, payload)
-	case _metadata:
-		fmt.Println("[server: got metadata (unexpected) from", addr)
-	case _chunk:
-		fmt.Println("[server] got chunk (unexpected) from", addr)
-	}
 }
 
 func (s *Server) handleRegister(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
@@ -354,13 +351,17 @@ func (s *Server) MessageFromServerAnyTime() {
 
 func (s *Server) Start() {
 	go s.MutexHandleActions()
+	
 	for i := 1; i <= 3; i++ {
 		go s.udpWriteWorker(i)
 	}
+
 	go s.udpReadWorker()
+	
 	for i := 1; i <= 3; i++ {
 		go s.packetParserWorker()
 	}
+
 	go s.fieldPacketTrackingWorker()
 	go s.MessageFromServerAnyTime()
 	select {}
