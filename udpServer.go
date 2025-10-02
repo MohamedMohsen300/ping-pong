@@ -465,5 +465,5 @@ func main() {
 	}
 
 	fmt.Println("Server running on port 9000")
-	go server.Start()
+	server.Start()
 }
