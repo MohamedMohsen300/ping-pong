@@ -63,7 +63,7 @@ type Server struct {
 	parseQueue     chan Job
 	genQueue       chan GenTask
 	mux            chan Mutex
-	ackNotify      map[uint16]chan struct{}
+	metadata     map[uint16]chan struct{}
 }
 
 func NewServer(server string) (*Server, error) {
@@ -86,7 +86,7 @@ func NewServer(server string) (*Server, error) {
 		parseQueue:     make(chan Job, 1000),
 		genQueue:       make(chan GenTask, 1000),
 		mux:            make(chan Mutex, 1000),
-		ackNotify:      make(map[uint16]chan struct{}),
+		metadata:      make(map[uint16]chan struct{}),
 	}
 	return s, nil
 }
@@ -130,6 +130,8 @@ func (s *Server) fieldPacketTrackingWorker() {
 			if now.Sub(pending.LastSend) >= 2*time.Second {
 				fmt.Printf("Retransmitting packet %d\n", packetID)
 				s.writeQueue <- pending.Job
+
+				// update LastSend timestamp
 				pending.LastSend = now
 				s.mux <- Mutex{
 					Action:   "addPending",
@@ -174,14 +176,15 @@ func (s *Server) packetGeneratorWorker() {
 		if task.MsgType != _ack {
 			binary.BigEndian.PutUint16(packet[0:2], packetID)
 			s.mux <- Mutex{Action: "addPending", PacketID: packetID, Addr: task.Addr, Packet: packet}
-
-			if task.AckChan != nil {
+			
+			if task.AckChan != nil && task.MsgType == _metadata {
 				s.mux <- Mutex{Action: "registerAckNotify", PacketID: packetID, AckChan: task.AckChan}
 			}
 		} else {
 			binary.BigEndian.PutUint16(packet[0:2], task.ClientAckPacketId)
 		}
 
+		// finally write
 		s.writeQueue <- Job{Addr: task.Addr, Packet: packet}
 	}
 }
@@ -301,29 +304,30 @@ func (s *Server) MutexHandleActions() {
 
 		case "deletePending":
 			delete(s.pendingPackets, mu.PacketID)
-			if ch, ok := s.ackNotify[mu.PacketID]; ok {
+			if ch, ok := s.metadata[mu.PacketID]; ok {
 				go func(c chan struct{}) {
 					close(c)
 				}(ch)
-				delete(s.ackNotify, mu.PacketID)
+				delete(s.metadata, mu.PacketID)
 			}
 
 		case "getAllPending":
-			copy := make(map[uint16]pendingPacketsJob)
+			copyMap := make(map[uint16]pendingPacketsJob)
 			for k, v := range s.pendingPackets {
-				copy[k] = v
+				copyMap[k] = v
 			}
-			mu.Reply <- copy
+			mu.Reply <- copyMap
 
 		case "registerAckNotify":
+			// register ackNotify only if ackChan present (we will only call this for metadata)
 			if mu.AckChan != nil {
-				s.ackNotify[mu.PacketID] = mu.AckChan
+				s.metadata[mu.PacketID] = mu.AckChan
 			}
 		}
 	}
 }
 
-func (s *Server) SendFileToClient(clientID string, filepath string, filename string, concurrentlyNum int, chunkSize int) error {
+func (s *Server) SendFileToClient(clientID string, filePath string, filename string, concurrentlyNum int, chunkSize int) error {
 	reply := make(chan interface{})
 	s.mux <- Mutex{Action: "clientByID", Id: clientID, Reply: reply}
 	clientI := (<-reply).(*Client)
@@ -332,12 +336,13 @@ func (s *Server) SendFileToClient(clientID string, filepath string, filename str
 	}
 	clientAddr := clientI.Addr
 
-	f, err := os.Open(filepath)
+	f, err := os.Open(filePath)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
+	// get info
 	stat, err := f.Stat()
 	if err != nil {
 		return err
@@ -345,6 +350,7 @@ func (s *Server) SendFileToClient(clientID string, filepath string, filename str
 	fileSize := stat.Size()
 	totalChunks := int((fileSize + int64(chunkSize) - 1) / int64(chunkSize))
 
+	// send metadata and wait ack on ackchan (metaAck)
 	metadataStr := fmt.Sprintf("%s|%d|%d", filename, totalChunks, chunkSize)
 	metaAck := make(chan struct{})
 	s.packetGenerator(clientAddr, _metadata, []byte(metadataStr), 0, metaAck)
@@ -356,6 +362,7 @@ func (s *Server) SendFileToClient(clientID string, filepath string, filename str
 		return fmt.Errorf("timeout waiting metadata ack")
 	}
 
+	// send chunks
 	sem := make(chan struct{}, concurrentlyNum)
 	var wg sync.WaitGroup
 	buf := make([]byte, chunkSize)
@@ -364,6 +371,9 @@ func (s *Server) SendFileToClient(clientID string, filepath string, filename str
 		n, err := io.ReadFull(f, buf)
 		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 			return err
+		}
+		if n == 0 {
+			break
 		}
 		chunkData := make([]byte, n)
 		copy(chunkData, buf[:n])
@@ -379,15 +389,7 @@ func (s *Server) SendFileToClient(clientID string, filepath string, filename str
 			binary.BigEndian.PutUint32(payload[0:4], uint32(idx))
 			copy(payload[4:], data)
 
-			ackCh := make(chan struct{})
-			s.packetGenerator(clientAddr, _chunk, payload, 0, ackCh)
-
-			select {
-			case <-ackCh:
-				fmt.Printf("chunk %d acked\n", idx)
-			case <-time.After(60 * time.Second):
-				fmt.Printf("timeout waiting ack for chunk %d\n", idx)
-			}
+			s.packetGenerator(clientAddr, _chunk, payload, 0, nil)
 		}(chunkIndex, chunkData)
 	}
 
