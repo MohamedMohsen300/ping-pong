@@ -345,14 +345,16 @@ func (s *Server) SendFileToClient(clientID string, filepath string, filename str
 	fileSize := stat.Size()
 	totalChunks := int((fileSize + int64(chunkSize) - 1) / int64(chunkSize))
 
+	// send metadata
 	metadataStr := fmt.Sprintf("%s|%d|%d", filename, totalChunks, chunkSize)
 	metaAck := make(chan struct{})
 	s.packetGenerator(clientAddr, _metadata, []byte(metadataStr), 0, metaAck)
 
+	// wait ack
 	select {
 	case <-metaAck:
 		fmt.Println("Metadata ack received, starting file transfer")
-	case <-time.After(30 * time.Second):
+	case <-time.After(20 * time.Second):
 		return fmt.Errorf("timeout waiting metadata ack")
 	}
 
@@ -379,15 +381,8 @@ func (s *Server) SendFileToClient(clientID string, filepath string, filename str
 			binary.BigEndian.PutUint32(payload[0:4], uint32(idx))
 			copy(payload[4:], data)
 
-			ackCh := make(chan struct{})
-			s.packetGenerator(clientAddr, _chunk, payload, 0, ackCh)
+			s.packetGenerator(clientAddr, _chunk, payload, 0, nil)
 
-			select {
-			case <-ackCh:
-				fmt.Printf("chunk %d acked\n", idx)
-			case <-time.After(60 * time.Second):
-				fmt.Printf("timeout waiting ack for chunk %d\n", idx)
-			}
 		}(chunkIndex, chunkData)
 	}
 
@@ -399,17 +394,17 @@ func (s *Server) SendFileToClient(clientID string, filepath string, filename str
 func (s *Server) Start() {
 	go s.MutexHandleActions()
 
-	for i := 1; i <= 3; i++ {
+	for i := 1; i <= 10; i++ {
 		go s.udpWriteWorker(i)
 	}
 
-	for i := 1; i <= 3; i++ {
+	for i := 1; i <= 10; i++ {
 		go s.packetGeneratorWorker()
 	}
 
 	go s.udpReadWorker()
 
-	for i := 1; i <= 3; i++ {
+	for i := 1; i <= 10; i++ {
 		go s.packetParserWorker()
 	}
 
