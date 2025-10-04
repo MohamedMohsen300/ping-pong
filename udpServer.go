@@ -116,7 +116,7 @@ func (s *Server) udpReadWorker() {
 }
 
 func (s *Server) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -131,7 +131,6 @@ func (s *Server) fieldPacketTrackingWorker() {
 				fmt.Printf("Retransmitting packet %d\n", packetID)
 				s.writeQueue <- pending.Job
 
-				// update LastSend timestamp
 				pending.LastSend = now
 				s.mux <- Mutex{
 					Action:   "addPending",
@@ -271,7 +270,7 @@ func (s *Server) MessageFromServerAnyTime() {
 		if send == "send" {
 			s.packetGenerator(client.Addr, _message, []byte(msg), 0, nil)
 		} else if send == "sendfile" {
-			err := s.SendFileToClient(id, msg, filepath.Base(msg), 10, 60000)
+			err := s.SendFileToClient(id, msg, filepath.Base(msg), 20, 60000)
 			if err != nil {
 				fmt.Println("SendFile error:", err)
 			}
