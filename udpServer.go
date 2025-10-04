@@ -63,7 +63,7 @@ type Server struct {
 	parseQueue     chan Job
 	genQueue       chan GenTask
 	mux            chan Mutex
-	metadata     map[uint16]chan struct{}
+	metadata       map[uint16]chan struct{}
 }
 
 func NewServer(server string) (*Server, error) {
@@ -86,7 +86,7 @@ func NewServer(server string) (*Server, error) {
 		parseQueue:     make(chan Job, 1000),
 		genQueue:       make(chan GenTask, 1000),
 		mux:            make(chan Mutex, 1000),
-		metadata:      make(map[uint16]chan struct{}),
+		metadata:       make(map[uint16]chan struct{}),
 	}
 	return s, nil
 }
@@ -116,7 +116,7 @@ func (s *Server) udpReadWorker() {
 }
 
 func (s *Server) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -127,7 +127,7 @@ func (s *Server) fieldPacketTrackingWorker() {
 		pendings := (<-reply).(map[uint16]pendingPacketsJob)
 
 		for packetID, pending := range pendings {
-			if now.Sub(pending.LastSend) >= 2*time.Second {
+			if now.Sub(pending.LastSend) >= 5*time.Second {
 				fmt.Printf("Retransmitting packet %d\n", packetID)
 				s.writeQueue <- pending.Job
 
@@ -175,15 +175,14 @@ func (s *Server) packetGeneratorWorker() {
 		if task.MsgType != _ack {
 			binary.BigEndian.PutUint16(packet[0:2], packetID)
 			s.mux <- Mutex{Action: "addPending", PacketID: packetID, Addr: task.Addr, Packet: packet}
-			
-			if task.AckChan != nil && task.MsgType == _metadata {
+
+			if task.AckChan != nil {
 				s.mux <- Mutex{Action: "registerAckNotify", PacketID: packetID, AckChan: task.AckChan}
 			}
 		} else {
 			binary.BigEndian.PutUint16(packet[0:2], task.ClientAckPacketId)
 		}
 
-		// finally write
 		s.writeQueue <- Job{Addr: task.Addr, Packet: packet}
 	}
 }
@@ -270,7 +269,7 @@ func (s *Server) MessageFromServerAnyTime() {
 		if send == "send" {
 			s.packetGenerator(client.Addr, _message, []byte(msg), 0, nil)
 		} else if send == "sendfile" {
-			err := s.SendFileToClient(id, msg, filepath.Base(msg), 20, 60000)
+			err := s.SendFileToClient(id, msg, filepath.Base(msg), 10, 60000)
 			if err != nil {
 				fmt.Println("SendFile error:", err)
 			}
@@ -318,10 +317,7 @@ func (s *Server) MutexHandleActions() {
 			mu.Reply <- copyMap
 
 		case "registerAckNotify":
-			// register ackNotify only if ackChan present (we will only call this for metadata)
-			if mu.AckChan != nil {
-				s.metadata[mu.PacketID] = mu.AckChan
-			}
+			s.metadata[mu.PacketID] = mu.AckChan
 		}
 	}
 }
@@ -333,7 +329,6 @@ func (s *Server) SendFileToClient(clientID string, filePath string, filename str
 	if clientI == nil {
 		return fmt.Errorf("client %s not found", clientID)
 	}
-	clientAddr := clientI.Addr
 
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -352,12 +347,12 @@ func (s *Server) SendFileToClient(clientID string, filePath string, filename str
 	// send metadata and wait ack on ackchan (metaAck)
 	metadataStr := fmt.Sprintf("%s|%d|%d", filename, totalChunks, chunkSize)
 	metaAck := make(chan struct{})
-	s.packetGenerator(clientAddr, _metadata, []byte(metadataStr), 0, metaAck)
+	s.packetGenerator(clientI.Addr, _metadata, []byte(metadataStr), 0, metaAck)
 
 	select {
 	case <-metaAck:
 		fmt.Println("Metadata ack received, starting file transfer")
-	case <-time.After(30 * time.Second):
+	case <-time.After(20 * time.Second):
 		return fmt.Errorf("timeout waiting metadata ack")
 	}
 
@@ -369,11 +364,11 @@ func (s *Server) SendFileToClient(clientID string, filePath string, filename str
 	for chunkIndex := 0; chunkIndex < totalChunks; chunkIndex++ {
 		n, err := io.ReadFull(f, buf)
 		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
-			return err
+			if n == 0 {
+				break
+			}
 		}
-		if n == 0 {
-			break
-		}
+
 		chunkData := make([]byte, n)
 		copy(chunkData, buf[:n])
 
@@ -388,7 +383,7 @@ func (s *Server) SendFileToClient(clientID string, filePath string, filename str
 			binary.BigEndian.PutUint32(payload[0:4], uint32(idx))
 			copy(payload[4:], data)
 
-			s.packetGenerator(clientAddr, _chunk, payload, 0, nil)
+			s.packetGenerator(clientI.Addr, _chunk, payload, 0, nil)
 		}(chunkIndex, chunkData)
 	}
 
