@@ -358,7 +358,7 @@ func (s *Server) SendFileToClient(clientID string, filepath string, filename str
 		return fmt.Errorf("timeout waiting metadata ack")
 	}
 
-	sem := make(chan struct{}, min(totalChunks,15))
+	sem := make(chan struct{}, 20)
 	var wg sync.WaitGroup
 	buf := make([]byte, chunkSize)
 
