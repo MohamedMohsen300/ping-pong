@@ -116,7 +116,7 @@ func (s *Server) udpReadWorker() {
 }
 
 func (s *Server) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -127,7 +127,7 @@ func (s *Server) fieldPacketTrackingWorker() {
 		pendings := (<-reply).(map[uint16]pendingPacketsJob)
 
 		for packetID, pending := range pendings {
-			if now.Sub(pending.LastSend) >= 1*time.Second {
+			if now.Sub(pending.LastSend) >= 500 * time.Millisecond {
 				fmt.Printf("Retransmitting packet %d\n", packetID)
 				s.writeQueue <- pending.Job
 				pending.LastSend = now
