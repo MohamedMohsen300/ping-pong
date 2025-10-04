@@ -116,7 +116,7 @@ func (s *Server) udpReadWorker() {
 }
 
 func (s *Server) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -127,7 +127,7 @@ func (s *Server) fieldPacketTrackingWorker() {
 		pendings := (<-reply).(map[uint16]pendingPacketsJob)
 
 		for packetID, pending := range pendings {
-			if now.Sub(pending.LastSend) >= 2*time.Second {
+			if now.Sub(pending.LastSend) >= 1*time.Second {
 				fmt.Printf("Retransmitting packet %d\n", packetID)
 				s.writeQueue <- pending.Job
 				pending.LastSend = now
@@ -268,7 +268,7 @@ func (s *Server) MessageFromServerAnyTime() {
 		if send == "send" {
 			s.packetGenerator(client.Addr, _message, []byte(msg), 0, nil)
 		} else if send == "sendfile" {
-			err := s.SendFileToClient(id, msg, filepath.Base(msg), 20, 50000)
+			err := s.SendFileToClient(id, msg, filepath.Base(msg), 15, 60000)
 			if err != nil {
 				fmt.Println("SendFile error:", err)
 			}
