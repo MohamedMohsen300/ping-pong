@@ -268,7 +268,7 @@ func (s *Server) MessageFromServerAnyTime() {
 		if send == "send" {
 			s.packetGenerator(client.Addr, _message, []byte(msg), 0, nil)
 		} else if send == "sendfile" {
-			err := s.SendFileToClient(id, msg, filepath.Base(msg), 10, 60000)
+			err := s.SendFileToClient(id, msg, filepath.Base(msg), 5, 60000)
 			if err != nil {
 				fmt.Println("SendFile error:", err)
 			}
@@ -385,9 +385,8 @@ func (s *Server) SendFileToClient(clientID string, filepath string, filename str
 
 		}(chunkIndex, chunkData)
 	}
-
-	wg.Wait()
 	fmt.Println("File transfer completed")
+	wg.Wait()
 	return nil
 }
 
