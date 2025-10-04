@@ -127,7 +127,7 @@ func (s *Server) fieldPacketTrackingWorker() {
 		pendings := (<-reply).(map[uint16]pendingPacketsJob)
 
 		for packetID, pending := range pendings {
-			if now.Sub(pending.LastSend) >= 2*time.Second {
+			if now.Sub(pending.LastSend) >= 4*time.Second {
 				fmt.Printf("Retransmitting packet %d\n", packetID)
 				s.writeQueue <- pending.Job
 				pending.LastSend = now
@@ -394,17 +394,17 @@ func (s *Server) SendFileToClient(clientID string, filepath string, filename str
 func (s *Server) Start() {
 	go s.MutexHandleActions()
 
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= 2; i++ {
 		go s.udpWriteWorker(i)
 	}
 
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= 2; i++ {
 		go s.packetGeneratorWorker()
 	}
 
 	go s.udpReadWorker()
 
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= 2; i++ {
 		go s.packetParserWorker()
 	}
 
