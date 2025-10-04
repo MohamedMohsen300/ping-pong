@@ -203,7 +203,7 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 	case _ack:
 		s.handleAck(packetID, payload)
 	case _metadata:
-		fmt.Printf("Received metadata from %s: %s\n", addr.String(), string(payload))
+		fmt.Printf("metadata from %s: %s\n", addr.String(), string(payload))
 	}
 }
 
@@ -408,7 +408,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	
+
 	fmt.Println("Server running on port 9000")
 	server.Start()
 }
