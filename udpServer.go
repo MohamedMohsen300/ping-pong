@@ -358,7 +358,7 @@ func (s *Server) SendFileToClient(clientID string, filepath string, filename str
 		return fmt.Errorf("timeout waiting metadata ack")
 	}
 
-	// sem := make(chan struct{}, concurrentlyNum)
+	sem := make(chan struct{})
 	var wg sync.WaitGroup
 	buf := make([]byte, chunkSize)
 
@@ -371,11 +371,11 @@ func (s *Server) SendFileToClient(clientID string, filepath string, filename str
 		copy(chunkData, buf[:n])
 
 		wg.Add(1)
-		// sem <- struct{}{}
+		sem <- struct{}{}  // up 100 -> keep wait
 
 		go func(idx int, data []byte) {
 			defer wg.Done()
-			// defer func() { <-sem }()
+			defer func() { <-sem }()
 
 			payload := make([]byte, 4+len(data))
 			binary.BigEndian.PutUint32(payload[0:4], uint32(idx))
