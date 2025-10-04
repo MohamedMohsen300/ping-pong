@@ -268,7 +268,7 @@ func (s *Server) MessageFromServerAnyTime() {
 		if send == "send" {
 			s.packetGenerator(client.Addr, _message, []byte(msg), 0, nil)
 		} else if send == "sendfile" {
-			err := s.SendFileToClient(id, msg, filepath.Base(msg), 1, 60000)
+			err := s.SendFileToClient(id, msg, filepath.Base(msg), 60000)
 			if err != nil {
 				fmt.Println("SendFile error:", err)
 			}
@@ -323,7 +323,7 @@ func (s *Server) MutexHandleActions() {
 	}
 }
 
-func (s *Server) SendFileToClient(clientID string, filepath string, filename string, concurrentlyNum int, chunkSize int) error {
+func (s *Server) SendFileToClient(clientID string, filepath string, filename string, chunkSize int) error {
 	reply := make(chan interface{})
 	s.mux <- Mutex{Action: "clientByID", Id: clientID, Reply: reply}
 	clientI := (<-reply).(*Client)
@@ -358,7 +358,7 @@ func (s *Server) SendFileToClient(clientID string, filepath string, filename str
 		return fmt.Errorf("timeout waiting metadata ack")
 	}
 
-	sem := make(chan struct{}, concurrentlyNum)
+	// sem := make(chan struct{}, concurrentlyNum)
 	var wg sync.WaitGroup
 	buf := make([]byte, chunkSize)
 
@@ -371,11 +371,11 @@ func (s *Server) SendFileToClient(clientID string, filepath string, filename str
 		copy(chunkData, buf[:n])
 
 		wg.Add(1)
-		sem <- struct{}{}
+		// sem <- struct{}{}
 
 		go func(idx int, data []byte) {
 			defer wg.Done()
-			defer func() { <-sem }()
+			// defer func() { <-sem }()
 
 			payload := make([]byte, 4+len(data))
 			binary.BigEndian.PutUint32(payload[0:4], uint32(idx))
