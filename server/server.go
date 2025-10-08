@@ -56,7 +56,7 @@ func (s *Server) Start() {
 	}
 
 	go s.udpReadWorker()
-	go s.fieldPacketTrackingWorker()
+	// go s.fieldPacketTrackingWorker()
 	go s.MessageFromServerAnyTime()
 
 	select {}

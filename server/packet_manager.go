@@ -72,26 +72,26 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 	}
 }
 
-func (s *Server) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
+// func (s *Server) fieldPacketTrackingWorker() {
+// 	ticker := time.NewTicker(500 * time.Millisecond)
+// 	defer ticker.Stop()
 
-	for range ticker.C {
-		now := time.Now()
+// 	for range ticker.C {
+// 		now := time.Now()
 
-		reply := make(chan interface{})
-		s.mux <- models.Mutex{Action: "getAllPending", Reply: reply}
-		pendings := (<-reply).(map[uint16]models.PendingPacketsJob)
+// 		reply := make(chan interface{})
+// 		s.mux <- models.Mutex{Action: "getAllPending", Reply: reply}
+// 		pendings := (<-reply).(map[uint16]models.PendingPacketsJob)
 
-		for packetID, pending := range pendings {
-			if now.Sub(pending.LastSend) >= 500*time.Millisecond {
-				// fmt.Printf("Retransmitting packet %d\n", packetID)
-				s.builtpackets <- pending.Job
-				s.mux <- models.Mutex{Action: "updatePending", PacketID: packetID}
-			}
-		}
-	}
-}
+// 		for packetID, pending := range pendings {
+// 			if now.Sub(pending.LastSend) >= 500*time.Millisecond {
+// 				// fmt.Printf("Retransmitting packet %d\n", packetID)
+// 				s.builtpackets <- pending.Job
+// 				s.mux <- models.Mutex{Action: "updatePending", PacketID: packetID}
+// 			}
+// 		}
+// 	}
+// }
 
 func (s *Server) handleAck(packetID uint16, payload []byte) {
 	fmt.Println("Client ack:", string(payload))
@@ -141,6 +141,7 @@ func (s *Server) SendFileToClient(client *models.Client, filepath string, filena
 		copy(payload[4:], chunkData)
 
 		s.packetGenerator(client.Addr, models.Chunk, payload, 0, nil)
+		time.Sleep(50*time.Millisecond)
 	}
 	return nil
 }
