@@ -89,13 +89,14 @@ func (s *Server) fieldPacketTrackingWorker() {
 				s.builtpackets <- pending.Job
 				s.mux <- models.Mutex{Action: "updatePending", PacketID: packetID}
 			}
-			time.Sleep(20 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 		}
 	}
 }
 
 func (s *Server) handleAck(packetID uint16, payload []byte) {
-	fmt.Println("Client ack:", string(payload))
+	_ = payload
+	// fmt.Println("Client ack:", string(payload))
 	s.mux <- models.Mutex{Action: "deletePending", PacketID: packetID}
 }
 
