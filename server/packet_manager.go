@@ -27,7 +27,7 @@ func (s *Server) pktGWorker() {
 		packet[4] = task.MsgType
 		copy(packet[5:], task.Payload)
 
-		if task.MsgType != models.Ack {
+		if task.MsgType != models.Ack && task.MsgType != models.Metadata{
 			binary.BigEndian.PutUint16(packet[0:2], packetID)
 			s.muxPending <- models.Mutex{Action: "addPending", PacketID: packetID, Addr: task.Addr, Packet: packet}
 			if task.AckChan != nil {
