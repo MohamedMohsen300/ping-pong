@@ -88,7 +88,7 @@ func (s *Server) fieldPacketTrackingWorker() {
 				fmt.Printf("Retransmitting packet %d\n", packetID)
 				s.muxPending <- models.Mutex{Action: "updatePending", PacketID: packetID}
 			}
-			time.Sleep(20 * time.Millisecond)
+			// time.Sleep(20 * time.Millisecond)
 		}
 	}
 }
@@ -141,7 +141,7 @@ func (s *Server) SendFileToClient(client *models.Client, filepath string, filena
 		copy(payload[4:], chunkData)
 
 		s.packetGenerator(client.Addr, models.Chunk, payload, 0, nil)
-		time.Sleep(30 * time.Millisecond)
+		// time.Sleep(30 * time.Millisecond)
 	}
 	return nil
 }
