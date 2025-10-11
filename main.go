@@ -6,11 +6,11 @@ import (
 )
 
 func main() {
-	s, err := server.NewServer(":9000")
+	s, err := server.NewServer(":11000")
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println("Server running on port 9000...... :)")
+	fmt.Println("Server running on port 11000...... :)")
 	s.Start()
 }
