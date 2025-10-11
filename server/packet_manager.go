@@ -164,7 +164,6 @@ func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte, clientAckPacketI
 	}
 }
 
-
 func (s *Server) fieldPacketTrackingWorker() {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -177,8 +176,9 @@ func (s *Server) fieldPacketTrackingWorker() {
 		pendings := (<-reply).(map[uint16]models.PendingPacketsJob)
 
 		for packetID, pending := range pendings {
-			if now.Sub(pending.LastSend) >= 1*time.Millisecond {
+			if now.Sub(pending.LastSend) >= 1*time.Second {
 				fmt.Printf("Retransmitting packet %d\n", packetID)
+				s.builtpackets <- pending.Job
 				s.muxPending <- models.Mutex{Action: "updatePending", PacketID: packetID}
 			}
 			time.Sleep(20 * time.Millisecond)
