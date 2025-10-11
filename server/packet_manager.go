@@ -73,7 +73,7 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 }
 
 func (s *Server) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -84,12 +84,12 @@ func (s *Server) fieldPacketTrackingWorker() {
 		pendings := (<-reply).(map[uint16]models.PendingPacketsJob)
 
 		for packetID, pending := range pendings {
-			if now.Sub(pending.LastSend) >= 500*time.Millisecond {
+			if now.Sub(pending.LastSend) >= 1*time.Second {
 				// fmt.Printf("Retransmitting packet %d\n", packetID)
 				s.builtpackets <- pending.Job
 				s.mux <- models.Mutex{Action: "updatePending", PacketID: packetID}
 			}
-			time.Sleep(20 * time.Millisecond)
+			// time.Sleep(20 * time.Millisecond)
 		}
 	}
 }
@@ -142,7 +142,7 @@ func (s *Server) SendFileToClient(client *models.Client, filepath string, filena
 		copy(payload[4:], chunkData)
 
 		s.packetGenerator(client.Addr, models.Chunk, payload, 0, nil)
-		time.Sleep(40 * time.Millisecond)
+		// time.Sleep(40 * time.Millisecond)
 	}
 	return nil
 }
