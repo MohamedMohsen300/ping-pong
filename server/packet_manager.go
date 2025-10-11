@@ -73,7 +73,7 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 }
 
 func (s *Server) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(500 * time.Microsecond)
+	ticker := time.NewTicker(800 * time.Microsecond)
 	defer ticker.Stop()
 
 	for range ticker.C {
