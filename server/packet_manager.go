@@ -27,7 +27,7 @@ func (s *Server) pktGWorker() {
 		packet[4] = task.MsgType
 		copy(packet[5:], task.Payload)
 
-		if task.MsgType != models.Ack && task.MsgType != models.Metadata{
+		if task.MsgType != models.Ack {
 			binary.BigEndian.PutUint16(packet[0:2], packetID)
 			s.muxPending <- models.Mutex{Action: "addPending", PacketID: packetID, Addr: task.Addr, Packet: packet}
 			if task.AckChan != nil {
@@ -73,7 +73,7 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 }
 
 func (s *Server) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(1000 * time.Microsecond)
+	ticker := time.NewTicker(2000 * time.Microsecond)
 	defer ticker.Stop()
 
 	for range ticker.C {
