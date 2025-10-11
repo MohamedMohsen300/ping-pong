@@ -9,21 +9,21 @@ import (
 
 func (s *Server) handleRegister(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
 	id := string(payload)
-	s.mux <- models.Mutex{Action: "registration", Addr: addr, Id: id}
+	s.muxClient <- models.Mutex{Action: "registration", Addr: addr, Id: id}
 	s.packetGenerator(addr, models.Ack, []byte("Registered success"), clientAckPacketId, nil)
 	fmt.Println("Registered client:", id, addr)
 }
 
 func (s *Server) getClientByAddr(addr *net.UDPAddr) *models.Client {
 	reply := make(chan interface{})
-	s.mux <- models.Mutex{Action: "clientByAddr", Addr: addr, Reply: reply}
+	s.muxClient <- models.Mutex{Action: "clientByAddr", Addr: addr, Reply: reply}
 	client := (<-reply).(*models.Client)
 	return client
 }
 
 func (s *Server) getClientById(id string) *models.Client {
 	reply := make(chan interface{})
-	s.mux <- models.Mutex{Action: "clientByID", Id: id, Reply: reply}
+	s.muxClient <- models.Mutex{Action: "clientByID", Id: id, Reply: reply}
 	client, _ := (<-reply).(*models.Client)
 	return client
 }

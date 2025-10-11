@@ -31,11 +31,7 @@ func (s *Server) udpReadWorker() {
 
 func (s *Server) packetSender() {
 	for {
-		select {
-		case job := <-s.builtpackets:
-			s.writeQueue <- job
-		case job := <-s.retransmitPackets:
-			s.writeQueue <- job
-		}
+		job := <-s.builtpackets
+		s.writeQueue <- job
 	}
 }

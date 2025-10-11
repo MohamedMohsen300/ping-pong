@@ -29,9 +29,9 @@ func (s *Server) pktGWorker() {
 
 		if task.MsgType != models.Ack {
 			binary.BigEndian.PutUint16(packet[0:2], packetID)
-			s.mux <- models.Mutex{Action: "addPending", PacketID: packetID, Addr: task.Addr, Packet: packet}
+			s.muxPending <- models.Mutex{Action: "addPending", PacketID: packetID, Addr: task.Addr, Packet: packet}
 			if task.AckChan != nil {
-				s.mux <- models.Mutex{Action: "registerAckMetadata", PacketID: packetID, AckChan: task.AckChan}
+				s.muxClient <- models.Mutex{Action: "registerAckMetadata", PacketID: packetID, AckChan: task.AckChan}
 			}
 		} else {
 			binary.BigEndian.PutUint16(packet[0:2], task.ClientAckPacketId)
@@ -73,21 +73,23 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 }
 
 func (s *Server) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(1500 * time.Microsecond)
+	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
 		now := time.Now()
 
-		reply := make(chan interface{})
-		s.mux <- models.Mutex{Action: "getAllPending", Reply: reply}
-		pendings := (<-reply).(map[uint16]models.PendingPacketsJob)
+		snap := s.snapshot.Load()
+		if snap == nil {
+			continue
+		}
+		pendings := snap.(map[uint16]models.PendingPacketsJob)
 
 		for packetID, pending := range pendings {
-			if now.Sub(pending.LastSend) >= 500*time.Millisecond {
+			if now.Sub(pending.LastSend) >= 1*time.Second {
 				// fmt.Printf("Retransmitting packet %d\n", packetID)
-				s.retransmitPackets <- pending.Job
-				s.mux <- models.Mutex{Action: "updatePending", PacketID: packetID}
+				s.builtpackets <- pending.Job
+				s.muxPending <- models.Mutex{Action: "updatePending", PacketID: packetID}
 			}
 			// time.Sleep(20 * time.Millisecond)
 		}
@@ -96,7 +98,7 @@ func (s *Server) fieldPacketTrackingWorker() {
 
 func (s *Server) handleAck(packetID uint16, payload []byte) {
 	fmt.Println("Client ack:", string(payload))
-	s.mux <- models.Mutex{Action: "deletePending", PacketID: packetID}
+	s.muxPending <- models.Mutex{Action: "deletePending", PacketID: packetID}
 }
 
 func (s *Server) SendFileToClient(client *models.Client, filepath string, filename string) error {

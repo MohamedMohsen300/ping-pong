@@ -2,6 +2,7 @@ package server
 
 import (
 	"net"
+	"sync/atomic"
 
 	"udp/models"
 )
@@ -15,9 +16,11 @@ type Server struct {
 	parseQueue        chan models.Job
 	genQueue          chan models.GenTask
 	builtpackets      chan models.Job
-	retransmitPackets chan models.Job //for resend only
-	mux               chan models.Mutex
+	muxPending        chan models.Mutex
+	muxClient         chan models.Mutex
 	metaPendingMap    map[uint16]chan struct{}
+
+	snapshot atomic.Value
 }
 
 func NewServer(addr string) (*Server, error) {
@@ -39,16 +42,17 @@ func NewServer(addr string) (*Server, error) {
 		parseQueue:        make(chan models.Job, 5000),
 		genQueue:          make(chan models.GenTask, 5000),
 		builtpackets:      make(chan models.Job, 5000),
-		retransmitPackets: make(chan models.Job, 5000),
-		mux:               make(chan models.Mutex, 5000),
+		muxPending:        make(chan models.Mutex, 5000),
+		muxClient:         make(chan models.Mutex, 5000),
 		metaPendingMap:    make(map[uint16]chan struct{}),
 	}
-
+	s.snapshot.Store(make(map[uint16]models.PendingPacketsJob))
 	return s, nil
 }
 
 func (s *Server) Start() {
 	go s.MutexHandleActions()
+	go s.MutexHandleClientActions()
 
 	for i := 0; i < 4; i++ {
 		go s.udpWriteWorker(i)
