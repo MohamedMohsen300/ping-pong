@@ -7,6 +7,8 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 	"udp/models"
 )
@@ -68,9 +70,100 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 	case models.Ack:
 		s.handleAck(packetID, payload)
 	case models.Metadata:
-		fmt.Printf("Received metadata from %s: %s\n", addr.String(), string(payload))
+		s.handleMetadata(addr, payload, packetID)
+	case models.Chunk:
+		s.handleChunk(addr, payload, packetID)
 	}
 }
+
+func (s *Server) handleMetadata(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
+	// payload: filename|totalChunks|chunkSize
+	parts := strings.Split(string(payload), "|")
+	if len(parts) != 3 {
+		fmt.Println("Invalid metadata from", addr.String())
+		return
+	}
+	filename := parts[0]
+	totalChunks, _ := strconv.Atoi(parts[1])
+	chunkSz, _ := strconv.Atoi(parts[2])
+
+	// prepare file for this addr
+	key := addr.String()
+	fpath := "recv_" + filename
+
+	f, err := os.OpenFile(fpath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		fmt.Println("Error opening file for writing:", err)
+		return
+	}
+
+	s.filesMu.Lock()
+	if old, ok := s.files[key]; ok {
+		old.Close()
+	}
+	s.files[key] = f
+	s.meta[key] = models.FileMeta{
+		Filename:    filename,
+		TotalChunks: totalChunks,
+		ChunkSize:   chunkSz,
+		Received:    0,
+	}
+	s.filesMu.Unlock()
+
+	// ack metadata back to client (client is expecting it)
+	s.packetGenerator(addr, models.Ack, []byte("metadata received"), clientAckPacketId, nil)
+	fmt.Printf("Metadata received from %s: %s (%d chunks, %d bytes each)\n", addr.String(), filename, totalChunks, chunkSz)
+}
+
+func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
+	if len(payload) < 4 {
+		return
+	}
+	idx := int(binary.BigEndian.Uint32(payload[0:4]))
+	data := make([]byte, len(payload)-4)
+	copy(data, payload[4:])
+
+	key := addr.String()
+	s.filesMu.Lock()
+	f, okf := s.files[key]
+	meta, okm := s.meta[key]
+	if okm {
+		meta.Received++
+		s.meta[key] = meta
+	}
+	s.filesMu.Unlock()
+
+	if !okf {
+		fmt.Println("No file handle for", key)
+		// still ack so sender knows it's received (or we could ignore)
+		s.packetGenerator(addr, models.Ack, []byte(fmt.Sprintf("chunk %d received (no file)", idx)), clientAckPacketId, nil)
+		return
+	}
+
+	offset := int64(idx * meta.ChunkSize)
+	_, err := f.WriteAt(data, offset)
+	if err != nil {
+		fmt.Println("Error writing chunk:", err)
+		return
+	}
+
+	// ack the chunk to client
+	s.packetGenerator(addr, models.Ack, []byte(fmt.Sprintf("chunk %d received", idx)), clientAckPacketId, nil)
+	fmt.Printf("Chunk %d received from %s (%d/%d)\n", idx, addr.String(), meta.Received, meta.TotalChunks)
+
+	// if done, close
+	if okm && meta.Received >= meta.TotalChunks {
+		s.filesMu.Lock()
+		if f2, ok := s.files[key]; ok {
+			f2.Close()
+			delete(s.files, key)
+		}
+		delete(s.meta, key)
+		s.filesMu.Unlock()
+		fmt.Printf("File saved from %s: recv_%s\n", addr.String(), meta.Filename)
+	}
+}
+
 
 func (s *Server) fieldPacketTrackingWorker() {
 	ticker := time.NewTicker(2 * time.Second)

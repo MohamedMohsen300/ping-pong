@@ -2,6 +2,8 @@ package server
 
 import (
 	"net"
+	"os"
+	"sync"
 	"sync/atomic"
 
 	"udp/models"
@@ -21,6 +23,10 @@ type Server struct {
 	metaPendingMap    map[uint16]chan struct{}
 
 	snapshot atomic.Value
+	//
+	filesMu sync.Mutex
+	files   map[string]*os.File
+	meta    map[string]models.FileMeta
 }
 
 func NewServer(addr string) (*Server, error) {
@@ -45,6 +51,8 @@ func NewServer(addr string) (*Server, error) {
 		muxPending:        make(chan models.Mutex, 5000),
 		muxClient:         make(chan models.Mutex, 5000),
 		metaPendingMap:    make(map[uint16]chan struct{}),
+		files:          make(map[string]*os.File),
+		meta:           make(map[string]models.FileMeta),
 	}
 	s.snapshot.Store(make(map[uint16]models.PendingPacketsJob))
 	return s, nil

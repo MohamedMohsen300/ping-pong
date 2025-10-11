@@ -39,6 +39,13 @@ type Client struct {
 	Addr *net.UDPAddr
 }
 
+type FileMeta struct {
+	Filename    string
+	TotalChunks int
+	ChunkSize   int
+	Received    int
+}
+
 type Mutex struct {
 	Action   string
 	Addr     *net.UDPAddr
