@@ -89,14 +89,13 @@ func (s *Server) fieldPacketTrackingWorker() {
 				s.builtpackets <- pending.Job
 				s.mux <- models.Mutex{Action: "updatePending", PacketID: packetID}
 			}
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(40 * time.Millisecond)
 		}
 	}
 }
 
 func (s *Server) handleAck(packetID uint16, payload []byte) {
-	_ = payload
-	// fmt.Println("Client ack:", string(payload))
+	fmt.Println("Client ack:", string(payload))
 	s.mux <- models.Mutex{Action: "deletePending", PacketID: packetID}
 }
 
@@ -143,7 +142,7 @@ func (s *Server) SendFileToClient(client *models.Client, filepath string, filena
 		copy(payload[4:], chunkData)
 
 		s.packetGenerator(client.Addr, models.Chunk, payload, 0, nil)
-		// time.Sleep(50 * time.Millisecond)
+		time.Sleep(40 * time.Millisecond)
 	}
 	return nil
 }
