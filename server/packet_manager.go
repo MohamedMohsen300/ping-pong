@@ -73,22 +73,19 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 }
 
 func (s *Server) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(2000 * time.Millisecond)
+	ticker := time.NewTicker(800 * time.Millisecond)
 	defer ticker.Stop()
 
 	for range ticker.C {
 		now := time.Now()
 
-		snap := s.snapshot.Load()
-		if snap == nil {
-			continue
-		}
-		pendings := snap.(map[uint16]models.PendingPacketsJob)
+		reply := make(chan interface{})
+		s.muxPending <- models.Mutex{Action: "getAllPending", Reply: reply}
+		pendings := (<-reply).(map[uint16]models.PendingPacketsJob)
 
 		for packetID, pending := range pendings {
-			if now.Sub(pending.LastSend) >= 800*time.Millisecond {
+			if now.Sub(pending.LastSend) >= 500*time.Millisecond {
 				// fmt.Printf("Retransmitting packet %d\n", packetID)
-				s.builtpackets <- pending.Job
 				s.muxPending <- models.Mutex{Action: "updatePending", PacketID: packetID}
 			}
 			// time.Sleep(20 * time.Millisecond)
