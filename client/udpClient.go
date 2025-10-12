@@ -139,7 +139,7 @@ func (c *Client) fieldPacketTrackingWorker() {
 
 		for packetID, pending := range pendings {
 			if now.Sub(pending.LastSend) >= 1*time.Second {
-				fmt.Printf("Retransmitting packet %d\n", packetID)
+				// fmt.Printf("Retransmitting packet %d\n", packetID)
 				c.writeQueue <- pending.Job
 				c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
 			}
@@ -442,7 +442,7 @@ func (c *Client) Start() {
 }
 
 func main() {
-	client := NewClient("2", "127.0.0.1:11000")
+	client := NewClient("2", "173.208.144.109:11000")
 	client.Start()
 
 	client.Register()

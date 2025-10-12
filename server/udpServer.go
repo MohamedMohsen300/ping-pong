@@ -365,7 +365,7 @@ func (s *Server) fieldPacketTrackingWorker() {
 
 		for packetID, pending := range pendings {
 			if now.Sub(pending.LastSend) >= 1*time.Second {
-				fmt.Printf("Retransmitting packet %d\n", packetID)
+				// fmt.Printf("Retransmitting packet %d\n", packetID)
 				s.builtpackets <- pending.Job
 				s.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
 			}
