@@ -44,6 +44,7 @@ type FileMeta struct {
 	TotalChunks int
 	ChunkSize   int
 	Received    int
+	ReceivedChunks map[int]bool
 }
 
 type Mutex struct {

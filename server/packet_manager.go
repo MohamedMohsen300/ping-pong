@@ -140,6 +140,12 @@ func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte, clientAckPacketI
 		return
 	}
 
+	// duplication
+	if meta.ReceivedChunks[idx] {
+        fmt.Printf("Chunk %d already received, skipping\n", idx)
+        return
+    }
+
 	offset := int64(idx * meta.ChunkSize)
 	_, err := f.WriteAt(data, offset)
 	if err != nil {
@@ -147,6 +153,7 @@ func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte, clientAckPacketI
 		return
 	}
 
+	meta.ReceivedChunks[idx] = true
 	// ack the chunk to client
 	s.packetGenerator(addr, models.Ack, []byte(fmt.Sprintf("chunk %d received", idx)), clientAckPacketId, nil)
 	fmt.Printf("Chunk %d received from %s (%d/%d)\n", idx, addr.String(), meta.Received, meta.TotalChunks)
