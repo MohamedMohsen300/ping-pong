@@ -303,6 +303,11 @@ func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte, clientAckPacketI
 	key := addr.String()
 	s.filesMu.Lock()
 
+	// check exist map
+	if _, exists := s.receivedChunks[key]; !exists {
+		s.receivedChunks[key] = make(map[int]bool)
+	}
+
 	// duplication
 	if s.receivedChunks[key][idx] {
 		s.filesMu.Unlock()
@@ -343,7 +348,7 @@ func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte, clientAckPacketI
 		delete(s.meta, key)
 		delete(s.receivedChunks, key)
 		s.filesMu.Unlock()
-		fmt.Printf("File saved from %s: recv_%s\n", addr.String(), meta.Filename)
+		fmt.Printf("File saved from %s: fromClient_%s\n", addr.String(), meta.Filename)
 	}
 }
 
@@ -417,7 +422,7 @@ func (s *Server) SendFileToClient(client *Client, filepath string, filename stri
 		copy(payload[4:], chunkData)
 
 		s.packetGenerator(client.Addr, Chunk, payload, 0, nil)
-		time.Sleep(30 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 	return nil
 }

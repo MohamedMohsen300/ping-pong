@@ -139,7 +139,7 @@ func (c *Client) fieldPacketTrackingWorker() {
 
 		for packetID, pending := range pendings {
 			if now.Sub(pending.LastSend) >= 1*time.Second {
-				// fmt.Printf("Retransmitting packet %d\n", packetID)
+				fmt.Printf("Retransmitting packet %d\n", packetID)
 				c.writeQueue <- pending.Job
 				c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
 			}
@@ -324,7 +324,7 @@ func (c *Client) handleChunk(payload []byte, clientAckPacketId uint16) {
 			delete(c.receivedChunks, c.fileName)
 		}
 		c.mux.Unlock()
-		fmt.Println("File received:", filename)
+		fmt.Printf("File saved from server: fromServer_%s\n",filename)
 	}
 }
 
@@ -341,14 +341,12 @@ func (c *Client) SendFileToServer(path string) error {
 	}
 
 	fileSize := stat.Size()
-	// use same chunkSize as server: but safe size — reduce fragmentation risk
 	totalChunks := int((fileSize + int64(ChunkSize) - 1) / int64(ChunkSize))
 
 	filename := filepath.Base(path)
 	metadataStr := fmt.Sprintf("%s|%d|%d", filename, totalChunks, ChunkSize)
 
 	metaAck := make(chan struct{})
-	// send metadata (do not add metadata to pending because server should just ack it once)
 	c.packetGenerator(_metadata, []byte(metadataStr), 0, metaAck, nil)
 
 	// wait ack
@@ -373,8 +371,7 @@ func (c *Client) SendFileToServer(path string) error {
 		copy(payload[4:], chunkData)
 
 		c.packetGenerator(_chunk, payload, 0, nil, nil)
-		// optionally throttle a little
-		time.Sleep(30 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
 	return nil
 }
@@ -445,7 +442,7 @@ func (c *Client) Start() {
 }
 
 func main() {
-	client := NewClient("2", "173.208.144.109:11000")
+	client := NewClient("2", "127.0.0.1:11000")
 	client.Start()
 
 	client.Register()
