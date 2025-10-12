@@ -4,7 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"math/rand"
+
+	// "math/rand"
 	"net"
 	"os"
 	"path/filepath"
@@ -80,6 +81,10 @@ type Server struct {
 	metaPendingMap map[uint16]chan struct{}
 
 	snapshot atomic.Value
+
+	packetIDCounter uint32
+	rttEstimate     atomic.Value
+
 	//
 	filesMu        sync.Mutex
 	files          map[string]*os.File
@@ -113,6 +118,8 @@ func NewServer(addr string) (*Server, error) {
 		meta:           make(map[string]FileMeta),
 		receivedChunks: make(map[string]map[int]bool),
 	}
+	s.packetIDCounter = 0
+	s.rttEstimate.Store(500 * time.Millisecond)
 	s.snapshot.Store(make(map[uint16]PendingPacketsJob))
 	return s, nil
 }
@@ -198,8 +205,11 @@ func (s *Server) pktGWorker() {
 	for {
 		task := <-s.genQueue
 		packet := make([]byte, 2+2+1+len(task.Payload))
-		r := rand.New(rand.NewSource(time.Now().UnixNano()))
-		packetID := uint16(r.Intn(65535))
+
+		// r := rand.New(rand.NewSource(time.Now().UnixNano()))
+		// packetID := uint16(r.Intn(65535))
+		pid := atomic.AddUint32(&s.packetIDCounter, 1)
+		packetID := uint16(pid & 0xFFFF) // احذر overflow لكن monotonic يكفي لتقليل التصادمات
 
 		binary.BigEndian.PutUint16(packet[2:4], 0)
 		packet[4] = task.MsgType
@@ -279,7 +289,7 @@ func (s *Server) handleMetadata(addr *net.UDPAddr, payload []byte, clientAckPack
 		fmt.Printf("Duplicate metadata ignored from %s\n", addr.String())
 		return
 	}
-	
+
 	s.files[key] = f
 	s.meta[key] = FileMeta{
 		Filename:    filename,
@@ -366,9 +376,23 @@ func (s *Server) fieldPacketTrackingWorker() {
 		s.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
 		pendings := (<-reply).(map[uint16]PendingPacketsJob)
 
+		// for packetID, pending := range pendings {
+		// 	if now.Sub(pending.LastSend) >= 1*time.Second {
+		// 		// fmt.Printf("Retransmitting packet %d\n", packetID)
+		// 		s.builtpackets <- pending.Job
+		// 		s.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
+		// 	}
+		// 	time.Sleep(20 * time.Millisecond)
+		// }
 		for packetID, pending := range pendings {
-			if now.Sub(pending.LastSend) >= 1*time.Second {
-				// fmt.Printf("Retransmitting packet %d\n", packetID)
+			// compute retransmit timeout from rttEstimate
+			rtt := s.rttEstimate.Load().(time.Duration)
+			timeout := rtt * 2
+			if timeout < 800*time.Millisecond {
+				timeout = 800 * time.Millisecond // حد سفلي معقول
+			}
+			if now.Sub(pending.LastSend) >= timeout {
+				fmt.Printf("Retransmitting packet %d\n", packetID)
 				s.builtpackets <- pending.Job
 				s.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
 			}
@@ -470,7 +494,16 @@ func (s *Server) MutexHandleActions() {
 			}
 
 		case "deletePending":
+			// if present, compute RTT from snapshot or c.pendingPackets
+			if p, ok := s.pendingPackets[mu.PacketID]; ok {
+				rtt := time.Since(p.LastSend)
+				// EWMA update: new = old*(7/8) + rtt*(1/8)
+				old := s.rttEstimate.Load().(time.Duration)
+				newRTT := (old*7 + rtt) / 8
+				s.rttEstimate.Store(newRTT)
+			}
 			delete(s.pendingPackets, mu.PacketID)
+
 			if ch, ok := s.metaPendingMap[mu.PacketID]; ok {
 				close(ch)
 				delete(s.metaPendingMap, mu.PacketID)

@@ -4,7 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"math/rand"
+
+	// "math/rand"
 	"net"
 	"os"
 	"path/filepath"
@@ -66,6 +67,9 @@ type Client struct {
 	muxPending chan Mutex
 	snapshot   atomic.Value
 
+	packetIDCounter uint32
+	rttEstimate     atomic.Value
+
 	// file receiving
 	mux            sync.Mutex
 	fileName       string
@@ -98,6 +102,9 @@ func NewClient(id string, server string) *Client {
 		muxPending:     make(chan Mutex, 5000),
 		receivedChunks: make(map[string]map[int]bool),
 	}
+	c.packetIDCounter = 0
+	c.rttEstimate.Store(500 * time.Millisecond)
+
 	c.snapshot.Store(make(map[uint16]PendingPacketsJob))
 
 	return c
@@ -137,14 +144,29 @@ func (c *Client) fieldPacketTrackingWorker() {
 		c.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
 		pendings := (<-reply).(map[uint16]PendingPacketsJob)
 
+		// for packetID, pending := range pendings {
+		// 	if now.Sub(pending.LastSend) >= 1*time.Second {
+		// 		fmt.Printf("Retransmitting packet %d\n", packetID)
+		// 		c.writeQueue <- pending.Job
+		// 		c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
+		// 	}
+		// 	time.Sleep(20 * time.Millisecond)
+		// }
 		for packetID, pending := range pendings {
-			if now.Sub(pending.LastSend) >= 1*time.Second {
-				// fmt.Printf("Retransmitting packet %d\n", packetID)
+			// compute retransmit timeout from rttEstimate
+			rtt := c.rttEstimate.Load().(time.Duration)
+			timeout := rtt * 2
+			if timeout < 800*time.Millisecond {
+				timeout = 800 * time.Millisecond // حد سفلي معقول
+			}
+			if now.Sub(pending.LastSend) >= timeout {
+				fmt.Printf("Retransmitting packet %d\n", packetID)
 				c.writeQueue <- pending.Job
 				c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
 			}
 			time.Sleep(20 * time.Millisecond)
 		}
+
 	}
 }
 
@@ -167,11 +189,13 @@ func (c *Client) packetGenerator(msgType byte, payload []byte, clientAckPacketId
 }
 
 func (c *Client) packetGeneratorWorker() {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	// r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for task := range c.genQueue {
 		packet := make([]byte, 2+2+1+len(task.Payload))
 
-		packetID := uint16(r.Intn(65535))
+		// packetID := uint16(r.Intn(65535))
+		pid := atomic.AddUint32(&c.packetIDCounter, 1)
+		packetID := uint16(pid & 0xFFFF) // احذر overflow لكن monotonic يكفي لتقليل التصادمات
 
 		binary.BigEndian.PutUint16(packet[2:4], 0)
 		packet[4] = task.MsgType
@@ -181,11 +205,23 @@ func (c *Client) packetGeneratorWorker() {
 			binary.BigEndian.PutUint16(packet[0:2], packetID)
 			c.muxPending <- Mutex{Action: "addPending", PacketID: packetID, Packet: packet}
 			// ack notifier
+			// if task.AckChan != nil {
+			// 	go func(pid uint16, ackCh chan struct{}) {
+			// 		for {
+			// 			_, ok := c.pendingPackets[pid]
+			// 			if !ok {
+			// 				close(ackCh)
+			// 				return
+			// 			}
+			// 			time.Sleep(100 * time.Millisecond)
+			// 		}
+			// 	}(packetID, task.AckChan)
+			// }
 			if task.AckChan != nil {
 				go func(pid uint16, ackCh chan struct{}) {
 					for {
-						_, ok := c.pendingPackets[pid]
-						if !ok {
+						snap := c.snapshot.Load().(map[uint16]PendingPacketsJob)
+						if _, ok := snap[pid]; !ok {
 							close(ackCh)
 							return
 						}
@@ -405,7 +441,18 @@ func (c *Client) MutexHandleActions() {
 				c.updatePendingSnapshot()
 			}
 
+		// case "deletePending":
+		// 	delete(c.pendingPackets, mu.PacketID)
+		// 	c.updatePendingSnapshot()
 		case "deletePending":
+			// if present, compute RTT from snapshot or c.pendingPackets
+			if p, ok := c.pendingPackets[mu.PacketID]; ok {
+				rtt := time.Since(p.LastSend)
+				// EWMA update: new = old*(7/8) + rtt*(1/8)
+				old := c.rttEstimate.Load().(time.Duration)
+				newRTT := (old*7 + rtt) / 8
+				c.rttEstimate.Store(newRTT)
+			}
 			delete(c.pendingPackets, mu.PacketID)
 			c.updatePendingSnapshot()
 
