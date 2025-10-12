@@ -160,7 +160,7 @@ func (c *Client) fieldPacketTrackingWorker() {
 				timeout = 800 * time.Millisecond // حد سفلي معقول
 			}
 			if now.Sub(pending.LastSend) >= timeout {
-				fmt.Printf("Retransmitting packet %d\n", packetID)
+				// fmt.Printf("Retransmitting packet %d\n", packetID)
 				c.writeQueue <- pending.Job
 				c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
 			}
