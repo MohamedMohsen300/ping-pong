@@ -274,9 +274,12 @@ func (s *Server) handleMetadata(addr *net.UDPAddr, payload []byte, clientAckPack
 	}
 
 	s.filesMu.Lock()
-	if old, ok := s.files[key]; ok {
-		old.Close()
+	if _, ok := s.files[key]; ok {
+		s.filesMu.Unlock()
+		fmt.Printf("Duplicate metadata ignored from %s\n", addr.String())
+		return
 	}
+	
 	s.files[key] = f
 	s.meta[key] = FileMeta{
 		Filename:    filename,

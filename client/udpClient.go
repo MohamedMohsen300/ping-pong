@@ -324,7 +324,7 @@ func (c *Client) handleChunk(payload []byte, clientAckPacketId uint16) {
 			delete(c.receivedChunks, c.fileName)
 		}
 		c.mux.Unlock()
-		fmt.Printf("File saved from server: fromServer_%s\n",filename)
+		fmt.Printf("File saved from server: fromServer_%s\n", filename)
 	}
 }
 
@@ -370,8 +370,20 @@ func (c *Client) SendFileToServer(path string) error {
 		binary.BigEndian.PutUint32(payload[0:4], uint32(chunkIndex))
 		copy(payload[4:], chunkData)
 
-		c.packetGenerator(_chunk, payload, 0, nil, nil)
-		time.Sleep(20 * time.Millisecond)
+		if chunkIndex%10 == 0 {
+			ack := make(chan struct{})
+			c.packetGenerator(_chunk, payload, 0, ack, nil)
+			select {
+			case <-ack:
+			case <-time.After(2 * time.Second):
+				fmt.Println("Chunk ack timeout, continuing...")
+			}
+		} else {
+			c.packetGenerator(_chunk, payload, 0, nil, nil)
+		}
+
+		// c.packetGenerator(_chunk, payload, 0, nil, nil)
+		// time.Sleep(20 * time.Millisecond)
 	}
 	return nil
 }
