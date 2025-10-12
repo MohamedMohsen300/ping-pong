@@ -81,9 +81,9 @@ type Server struct {
 
 	snapshot atomic.Value
 	//
-	filesMu sync.Mutex
-	files   map[string]*os.File
-	meta    map[string]FileMeta
+	filesMu        sync.Mutex
+	files          map[string]*os.File
+	meta           map[string]FileMeta
 	receivedChunks map[string]map[int]bool
 }
 
@@ -302,7 +302,7 @@ func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte, clientAckPacketI
 
 	key := addr.String()
 	s.filesMu.Lock()
-	
+
 	// duplication
 	if s.receivedChunks[key][idx] {
 		s.filesMu.Unlock()
@@ -547,31 +547,3 @@ func main() {
 	fmt.Println("Server running on port 11000...... :)")
 	s.Start()
 }
-
-
-
-
-
-
-
-
-
-
-
-
-// package main
-
-// import (
-// 	"fmt"
-// 	"udp/server"
-// )
-
-// func main() {
-// 	s, err := server.NewServer(":5000")
-// 	if err != nil {
-// 		panic(err)
-// 	}
-
-// 	fmt.Println("Server running on port 5000...... :)")
-// 	s.Start()
-// }
