@@ -360,27 +360,27 @@ func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte, clientAckPacketI
 	}
 }
 
-func (s *Server) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(3 * time.Second)
-	defer ticker.Stop()
+// func (s *Server) fieldPacketTrackingWorker() {
+// 	ticker := time.NewTicker(3 * time.Second)
+// 	defer ticker.Stop()
 
-	for range ticker.C {
-		now := time.Now()
+// 	for range ticker.C {
+// 		now := time.Now()
 
-		reply := make(chan interface{})
-		s.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
-		pendings := (<-reply).(map[uint16]PendingPacketsJob)
+// 		reply := make(chan interface{})
+// 		s.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
+// 		pendings := (<-reply).(map[uint16]PendingPacketsJob)
 
-		for packetID, pending := range pendings {
-			if now.Sub(pending.LastSend) >= 1*time.Second {
-				// fmt.Printf("Retransmitting packet %d\n", packetID)
-				s.builtpackets <- pending.Job
-				s.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
-			}
-			time.Sleep(20 * time.Millisecond)
-		}
-	}
-}
+// 		for packetID, pending := range pendings {
+// 			if now.Sub(pending.LastSend) >= 1*time.Second {
+// 				// fmt.Printf("Retransmitting packet %d\n", packetID)
+// 				s.builtpackets <- pending.Job
+// 				s.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
+// 			}
+// 			time.Sleep(20 * time.Millisecond)
+// 		}
+// 	}
+// }
 
 func (s *Server) handleAck(packetID uint16, payload []byte) {
 	fmt.Println("Client ack:", string(payload))
@@ -545,7 +545,7 @@ func (s *Server) Start() {
 	}
 
 	go s.udpReadWorker()
-	go s.fieldPacketTrackingWorker()
+	// go s.fieldPacketTrackingWorker()
 	go s.MessageFromServerAnyTime()
 
 	select {}
