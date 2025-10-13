@@ -26,6 +26,12 @@ const (
 
 	ChunkSize = 1200 //10000//65507 - (2 + 2 + 1 + 4)
 )
+//upload
+// download
+
+// server -> client  speed  // download  // we 30 mb  /  100 mb
+
+// client -> server  slow  //upload  // 3 mb  
 
 var counter_write = 0
 var counter_read = 0
@@ -519,14 +525,12 @@ func main() {
 	go func() {
 		for range ticker.C {
 			client.Ping()
+			fmt.Println("counter_write", counter_write)
+			fmt.Println("counter_read", counter_read)
 		}
 	}()
 
 	for {
-		time.Sleep(time.Minute)
-		fmt.Println("counter_write",counter_write)
-		fmt.Println("counter_read",counter_read)
-
 		var input string
 		fmt.Scan(&input)
 
