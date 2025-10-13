@@ -136,7 +136,7 @@ func (s *Server) udpWriteWorker(id int) {
 		if n != len(job.Packet) {
 			counterWriter += 1
 		}
-
+//  client -> server  || server (handle checksum) 
 	}
 }
 
