@@ -576,7 +576,9 @@ func (s *Server) Start() {
 
 	time.Sleep(1*time.Minute)
 	fmt.Println("countWr",counterWriter)
+	fmt.Println("countWr",counterWriter_0)
 	fmt.Println("countRe",counterReader)
+	fmt.Println("countRe",counterReader_0)
 	fmt.Println("errorRe",errorReader)
 	fmt.Println("errorWr:",errorWriter)
 	select {}
