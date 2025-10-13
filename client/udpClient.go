@@ -24,8 +24,10 @@ const (
 	_metadata = 5
 	_chunk    = 6
 
-	ChunkSize = 10000//65507 - (2 + 2 + 1 + 4)
+	ChunkSize = 1200 //10000//65507 - (2 + 2 + 1 + 4)
 )
+
+var counter = 0
 
 type Job struct {
 	Addr   *net.UDPAddr
@@ -124,6 +126,9 @@ func (c *Client) readWorker() {
 	buffer := make([]byte, 65507)
 	for {
 		n, _, err := c.conn.ReadFromUDP(buffer)
+		if n == 1209 {
+			counter++
+		}
 		if err != nil {
 			fmt.Println("Error receiving:", err)
 			continue
@@ -134,41 +139,41 @@ func (c *Client) readWorker() {
 	}
 }
 
-func (c *Client) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
+// func (c *Client) fieldPacketTrackingWorker() {
+// 	ticker := time.NewTicker(2 * time.Second)
+// 	defer ticker.Stop()
 
-	for range ticker.C {
-		now := time.Now()
-		reply := make(chan interface{})
-		c.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
-		pendings := (<-reply).(map[uint16]PendingPacketsJob)
+// 	for range ticker.C {
+// 		now := time.Now()
+// 		reply := make(chan interface{})
+// 		c.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
+// 		pendings := (<-reply).(map[uint16]PendingPacketsJob)
 
-		// for packetID, pending := range pendings {
-		// 	if now.Sub(pending.LastSend) >= 1*time.Second {
-		// 		fmt.Printf("Retransmitting packet %d\n", packetID)
-		// 		c.writeQueue <- pending.Job
-		// 		c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
-		// 	}
-		// 	time.Sleep(20 * time.Millisecond)
-		// }
-		for packetID, pending := range pendings {
-			// compute retransmit timeout from rttEstimate
-			rtt := c.rttEstimate.Load().(time.Duration)
-			timeout := rtt * 2
-			if timeout < 800*time.Millisecond {
-				timeout = 800 * time.Millisecond
-			}
-			if now.Sub(pending.LastSend) >= timeout {
-				// fmt.Printf("Retransmitting packet %d\n", packetID)
-				c.writeQueue <- pending.Job
-				c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
-			}
-			time.Sleep(20 * time.Millisecond)
-		}
+// 		// for packetID, pending := range pendings {
+// 		// 	if now.Sub(pending.LastSend) >= 1*time.Second {
+// 		// 		fmt.Printf("Retransmitting packet %d\n", packetID)
+// 		// 		c.writeQueue <- pending.Job
+// 		// 		c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
+// 		// 	}
+// 		// 	time.Sleep(20 * time.Millisecond)
+// 		// }
+// 		for packetID, pending := range pendings {
+// 			// compute retransmit timeout from rttEstimate
+// 			rtt := c.rttEstimate.Load().(time.Duration)
+// 			timeout := rtt * 2
+// 			if timeout < 800*time.Millisecond {
+// 				timeout = 800 * time.Millisecond
+// 			}
+// 			if now.Sub(pending.LastSend) >= timeout {
+// 				// fmt.Printf("Retransmitting packet %d\n", packetID)
+// 				c.writeQueue <- pending.Job
+// 				c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
+// 			}
+// 			time.Sleep(20 * time.Millisecond)
+// 		}
 
-	}
-}
+// 	}
+// }
 
 func (c *Client) packetParserWorker() {
 	for {
@@ -482,22 +487,22 @@ func (c *Client) updatePendingSnapshot() {
 }
 
 func (c *Client) Start() {
-	for i := 1; i <= 4; i++ {
+	for i := 1; i <= 1; i++ {
 		go c.writeWorker(i)
 	}
 
-	for i := 1; i <= 4; i++ {
+	for i := 1; i <= 1; i++ {
 		go c.packetGeneratorWorker()
 	}
 
 	go c.readWorker()
 
-	for i := 1; i <= 4; i++ {
+	for i := 1; i <= 1; i++ {
 		go c.packetParserWorker()
 	}
 
 	go c.MutexHandleActions()
-	go c.fieldPacketTrackingWorker()
+	// go c.fieldPacketTrackingWorker()
 }
 
 func main() {
@@ -514,6 +519,9 @@ func main() {
 	}()
 
 	for {
+		time.Sleep(time.Minute)
+		fmt.Println(counter)
+
 		var input string
 		fmt.Scan(&input)
 

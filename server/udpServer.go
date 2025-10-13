@@ -24,9 +24,9 @@ const (
 	Metadata = 5
 	Chunk    = 6
 	//total - (pktID + encDec + msgtype + chunkIndex)
-	ChunkSize = 10000 //65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
+	ChunkSize = 1200//10000 //65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
 )
-
+var counter =0
 type Job struct {
 	Addr   *net.UDPAddr
 	Packet []byte
@@ -121,9 +121,12 @@ func NewServer(addr string) (*Server, error) {
 }
 
 func (s *Server) udpWriteWorker(id int) {
-	for {
+	for {   // 2+2+1+ 4+1200  = 1209
 		job := <-s.writeQueue
-		_, err := s.conn.WriteToUDP(job.Packet, job.Addr)
+		n, err := s.conn.WriteToUDP(job.Packet, job.Addr)
+		if n==1209{
+			counter++
+		}
 		if err != nil {
 			fmt.Printf("Writer %d error: %v\n", id, err)
 		}
@@ -360,27 +363,27 @@ func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte, clientAckPacketI
 	}
 }
 
-func (s *Server) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(3 * time.Second)
-	defer ticker.Stop()
+// func (s *Server) fieldPacketTrackingWorker() {
+// 	ticker := time.NewTicker(3 * time.Second)
+// 	defer ticker.Stop()
 
-	for range ticker.C {
-		now := time.Now()
+// 	for range ticker.C {
+// 		now := time.Now()
 
-		reply := make(chan interface{})
-		s.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
-		pendings := (<-reply).(map[uint16]PendingPacketsJob)
+// 		reply := make(chan interface{})
+// 		s.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
+// 		pendings := (<-reply).(map[uint16]PendingPacketsJob)
 
-		for packetID, pending := range pendings {
-			if now.Sub(pending.LastSend) >= 1*time.Second {
-				// fmt.Printf("Retransmitting packet %d\n", packetID)
-				s.builtpackets <- pending.Job
-				s.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
-			}
-			time.Sleep(20 * time.Millisecond)
-		}
-	}
-}
+// 		for packetID, pending := range pendings {
+// 			if now.Sub(pending.LastSend) >= 1*time.Second {
+// 				// fmt.Printf("Retransmitting packet %d\n", packetID)
+// 				s.builtpackets <- pending.Job
+// 				s.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
+// 			}
+// 			time.Sleep(20 * time.Millisecond)
+// 		}
+// 	}
+// }
 
 func (s *Server) handleAck(packetID uint16, payload []byte) {
 	fmt.Println("Client ack:", string(payload))
@@ -537,7 +540,7 @@ func (s *Server) Start() {
 	go s.MutexHandleActions()
 	go s.MutexHandleClientActions()
 
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 1; i++ {
 		go s.udpWriteWorker(i)
 		go s.pktGWorker()
 		go s.packetSender()
@@ -545,9 +548,11 @@ func (s *Server) Start() {
 	}
 
 	go s.udpReadWorker()
-	go s.fieldPacketTrackingWorker()
+	// go s.fieldPacketTrackingWorker()
 	go s.MessageFromServerAnyTime()
 
+	time.Sleep(time.Minute)
+	fmt.Println(counter)
 	select {}
 }
 
