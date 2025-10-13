@@ -24,9 +24,11 @@ const (
 	Metadata = 5
 	Chunk    = 6
 	//total - (pktID + encDec + msgtype + chunkIndex)
-	ChunkSize = 1200//10000 //65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
+	ChunkSize = 1200 //10000 //65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
 )
-var counter =0
+
+var counter_write = 0
+var counter_read =0
 type Job struct {
 	Addr   *net.UDPAddr
 	Packet []byte
@@ -121,11 +123,11 @@ func NewServer(addr string) (*Server, error) {
 }
 
 func (s *Server) udpWriteWorker(id int) {
-	for {   // 2+2+1+ 4+1200  = 1209
+	for { // 2+2+1+ 4+1200  = 1209
 		job := <-s.writeQueue
 		n, err := s.conn.WriteToUDP(job.Packet, job.Addr)
-		if n==1209{
-			counter++
+		if n == 1209 {
+			counter_write++
 		}
 		if err != nil {
 			fmt.Printf("Writer %d error: %v\n", id, err)
@@ -137,6 +139,9 @@ func (s *Server) udpReadWorker() {
 	buf := make([]byte, 65507)
 	for {
 		n, addr, err := s.conn.ReadFromUDP(buf)
+		if n == 1209 {
+			counter_read++
+		}
 		if err != nil {
 			fmt.Println("Read error:", err)
 			continue
@@ -552,7 +557,8 @@ func (s *Server) Start() {
 	go s.MessageFromServerAnyTime()
 
 	time.Sleep(time.Minute)
-	fmt.Println(counter)
+	fmt.Println("counter_write", counter_write)
+	fmt.Println("counter_read", counter_read)
 	select {}
 }
 

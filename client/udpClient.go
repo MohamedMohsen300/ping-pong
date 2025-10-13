@@ -27,7 +27,8 @@ const (
 	ChunkSize = 1200 //10000//65507 - (2 + 2 + 1 + 4)
 )
 
-var counter = 0
+var counter_write = 0
+var counter_read = 0
 
 type Job struct {
 	Addr   *net.UDPAddr
@@ -115,7 +116,10 @@ func NewClient(id string, server string) *Client {
 func (c *Client) writeWorker(id int) {
 	for {
 		job := <-c.writeQueue
-		_, err := c.conn.Write(job.Packet)
+		n, err := c.conn.Write(job.Packet)
+		if n == 1209 {
+			counter_write++
+		}
 		if err != nil {
 			fmt.Printf("Writer %d error: %v\n", id, err)
 		}
@@ -127,7 +131,7 @@ func (c *Client) readWorker() {
 	for {
 		n, _, err := c.conn.ReadFromUDP(buffer)
 		if n == 1209 {
-			counter++
+			counter_read++
 		}
 		if err != nil {
 			fmt.Println("Error receiving:", err)
@@ -520,7 +524,8 @@ func main() {
 
 	for {
 		time.Sleep(time.Minute)
-		fmt.Println(counter)
+		fmt.Println("counter_write",counter_write)
+		fmt.Println("counter_read",counter_read)
 
 		var input string
 		fmt.Scan(&input)
