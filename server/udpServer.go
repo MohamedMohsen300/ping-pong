@@ -24,9 +24,10 @@ const (
 	Metadata = 5
 	Chunk    = 6
 	//total - (pktID + encDec + msgtype + chunkIndex)
-	ChunkSize = 600 //65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
+	ChunkSize = 1200 //65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
 )
-
+var counterWriter =0
+var counterReader =0
 type Job struct {
 	Addr   *net.UDPAddr
 	Packet []byte
@@ -123,7 +124,10 @@ func NewServer(addr string) (*Server, error) {
 func (s *Server) udpWriteWorker(id int) {
 	for {
 		job := <-s.writeQueue
-		_, err := s.conn.WriteToUDP(job.Packet, job.Addr)
+		n, err := s.conn.WriteToUDP(job.Packet, job.Addr)
+		if n == len(job.Packet){
+			counterWriter+=1
+		}
 		if err != nil {
 			fmt.Printf("Writer %d error: %v\n", id, err)
 		}
@@ -432,6 +436,9 @@ func (s *Server) SendFileToClient(client *Client, filepath string, filename stri
 		s.packetGenerator(client.Addr, Chunk, payload, 0, nil)
 		// time.Sleep(20 * time.Millisecond)
 	}
+	fmt.Println(counterWriter)
+	fmt.Println(counterReader)
+
 	return nil
 }
 
