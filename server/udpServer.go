@@ -28,7 +28,9 @@ const (
 )
 
 var counterWriter = 0
+var counterWriter_0 = 0
 var counterReader = 0
+var counterReader_0 = 0
 var errorWriter = 0
 var errorReader = 0
 
@@ -134,6 +136,10 @@ func (s *Server) udpWriteWorker(id int) {
 			fmt.Printf("Writer %d error: %v\n", id, err)
 		}
 		if n != len(job.Packet) {
+			if n==0{
+				counterWriter_0=+1
+				continue
+			}
 			counterWriter += 1
 		}
 //  client -> server  || server (handle checksum) 
@@ -150,6 +156,10 @@ func (s *Server) udpReadWorker() {
 			continue
 		}
 		if n != 1200 {
+			if n==0{
+				counterReader_0+=1
+				continue
+			}
 			counterReader += 1
 		}
 
