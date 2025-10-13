@@ -24,7 +24,7 @@ const (
 	_metadata = 5
 	_chunk    = 6
 
-	ChunkSize = 1200//65507 - (2 + 2 + 1 + 4)
+	ChunkSize = 600//65507 - (2 + 2 + 1 + 4)
 )
 
 type Job struct {
