@@ -564,7 +564,7 @@ func (s *Server) Start() {
 	// go s.fieldPacketTrackingWorker()
 	go s.MessageFromServerAnyTime()
 
-	time.Sleep(2*time.Minute)
+	time.Sleep(1*time.Minute)
 	fmt.Println("countWr",counterWriter)
 	fmt.Println("countRe",counterReader)
 	fmt.Println("errorRe",errorReader)
