@@ -29,8 +29,10 @@ const (
 
 var counterWriter = 0
 var counterWriter_0 = 0
+var counterWriter_1200 = 0
 var counterReader = 0
 var counterReader_0 = 0
+var counterReader_1200 = 0
 var errorWriter = 0
 var errorReader = 0
 
@@ -141,6 +143,8 @@ func (s *Server) udpWriteWorker(id int) {
 				continue
 			}
 			counterWriter += 1
+		}else{
+			counterWriter_1200+=1
 		}
 //  client -> server  || server (handle checksum) 
 	}
@@ -161,6 +165,8 @@ func (s *Server) udpReadWorker() {
 				continue
 			}
 			counterReader += 1
+		}else{
+			counterReader_1200+=1
 		}
 
 		packet := make([]byte, n)
@@ -574,13 +580,17 @@ func (s *Server) Start() {
 	// go s.fieldPacketTrackingWorker()
 	go s.MessageFromServerAnyTime()
 
-	time.Sleep(1*time.Minute)
-	fmt.Println("countWr",counterWriter)
-	fmt.Println("countWr",counterWriter_0)
-	fmt.Println("countRe",counterReader)
-	fmt.Println("countRe",counterReader_0)
-	fmt.Println("errorRe",errorReader)
-	fmt.Println("errorWr:",errorWriter)
+	time.Sleep(2 * time.Minute)
+		fmt.Println("countWr", counterWriter)
+		fmt.Println("countWr_0", counterWriter_0)
+		fmt.Println("countWr_1200", counterWriter_1200)
+		fmt.Println("countRe", counterReader)
+		fmt.Println("countRe_0", counterReader_0)
+		fmt.Println("countRe_1200", counterReader_1200)
+		fmt.Println("errorRe", errorReader)
+		fmt.Println("errorWr:", errorWriter)
+		fmt.Println("total_writer:", counterWriter+counterWriter_0+counterWriter_1200)
+		fmt.Println("total_reader:", counterReader+counterReader_0+counterReader_1200)
 	select {}
 }
 
