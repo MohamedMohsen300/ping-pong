@@ -434,7 +434,7 @@ func (c *Client) SendFileToServer(path string) error {
 		}
 
 		// c.packetGenerator(_chunk, payload, 0, nil, nil)
-		// time.Sleep(20 * time.Millisecond)
+		// time.Sleep(time.Millisecond)
 	}
 	return nil
 }
