@@ -152,12 +152,12 @@ func (c *Client) fieldPacketTrackingWorker() {
 		// 	}
 		// 	time.Sleep(20 * time.Millisecond)
 		// }
-		for packetID, pending := range pendings { 
+		for packetID, pending := range pendings {
 			// compute retransmit timeout from rttEstimate
 			rtt := c.rttEstimate.Load().(time.Duration)
 			timeout := rtt * 2
 			if timeout < 800*time.Millisecond {
-				timeout = 800 * time.Millisecond // حد سفلي معقول
+				timeout = 800 * time.Millisecond
 			}
 			if now.Sub(pending.LastSend) >= timeout {
 				// fmt.Printf("Retransmitting packet %d\n", packetID)

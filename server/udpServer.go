@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+
 	// "math/rand"
 	"net"
 	"os"
@@ -23,7 +24,7 @@ const (
 	Metadata = 5
 	Chunk    = 6
 	//total - (pktID + encDec + msgtype + chunkIndex)
-	ChunkSize = 10000//65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
+	ChunkSize = 10000 //65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
 )
 
 type Job struct {
@@ -80,7 +81,7 @@ type Server struct {
 	metaPendingMap map[uint16]chan struct{}
 
 	snapshot atomic.Value
-	
+
 	packetIDCounter uint32
 	//
 	filesMu        sync.Mutex
@@ -283,7 +284,7 @@ func (s *Server) handleMetadata(addr *net.UDPAddr, payload []byte, clientAckPack
 		fmt.Printf("Duplicate metadata ignored from %s\n", addr.String())
 		return
 	}
-	
+
 	s.files[key] = f
 	s.meta[key] = FileMeta{
 		Filename:    filename,
