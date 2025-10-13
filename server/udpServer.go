@@ -24,17 +24,8 @@ const (
 	Metadata = 5
 	Chunk    = 6
 	//total - (pktID + encDec + msgtype + chunkIndex)
-	ChunkSize = 1200 //65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
+	ChunkSize = 10000 //65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
 )
-var ack_count=0
-var counterWriter = 0
-var counterWriter_0 = 0
-var counterWriter_1200 = 0
-var counterReader = 0
-var counterReader_0 = 0
-var counterReader_1200 = 0
-var errorWriter = 0
-var errorReader = 0
 
 type Job struct {
 	Addr   *net.UDPAddr
@@ -132,21 +123,10 @@ func NewServer(addr string) (*Server, error) {
 func (s *Server) udpWriteWorker(id int) {
 	for {
 		job := <-s.writeQueue
-		n, err := s.conn.WriteToUDP(job.Packet, job.Addr)
+		_, err := s.conn.WriteToUDP(job.Packet, job.Addr)
 		if err != nil {
-			errorWriter += 1
 			fmt.Printf("Writer %d error: %v\n", id, err)
 		}
-		if n != len(job.Packet) {
-			if n==0{
-				counterWriter_0=+1
-				continue
-			}
-			counterWriter += 1
-		}else{
-			counterWriter_1200+=1
-		}
-//  client -> server  || server (handle checksum) 
 	}
 }
 
@@ -155,20 +135,9 @@ func (s *Server) udpReadWorker() {
 	for {
 		n, addr, err := s.conn.ReadFromUDP(buf)
 		if err != nil {
-			errorReader += 1
 			fmt.Println("Read error:", err)
 			continue
 		}
-		if n != 1200 {
-			if n==0{
-				counterReader_0+=1
-				continue
-			}
-			counterReader += 1
-		}else{
-			counterReader_1200+=1
-		}
-
 		packet := make([]byte, n)
 		copy(packet, buf[:n])
 		s.parseQueue <- Job{Addr: addr, Packet: packet}
@@ -391,31 +360,30 @@ func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte, clientAckPacketI
 	}
 }
 
-// func (s *Server) fieldPacketTrackingWorker() {
-// 	ticker := time.NewTicker(3 * time.Second)
-// 	defer ticker.Stop()
+func (s *Server) fieldPacketTrackingWorker() {
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
 
-// 	for range ticker.C {
-// 		now := time.Now()
+	for range ticker.C {
+		now := time.Now()
 
-// 		reply := make(chan interface{})
-// 		s.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
-// 		pendings := (<-reply).(map[uint16]PendingPacketsJob)
+		reply := make(chan interface{})
+		s.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
+		pendings := (<-reply).(map[uint16]PendingPacketsJob)
 
-// 		for packetID, pending := range pendings {
-// 			if now.Sub(pending.LastSend) >= 1*time.Second {
-// 				// fmt.Printf("Retransmitting packet %d\n", packetID)
-// 				s.builtpackets <- pending.Job
-// 				s.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
-// 			}
-// 			time.Sleep(20 * time.Millisecond)
-// 		}
-// 	}
-// }
+		for packetID, pending := range pendings {
+			if now.Sub(pending.LastSend) >= 1*time.Second {
+				// fmt.Printf("Retransmitting packet %d\n", packetID)
+				s.builtpackets <- pending.Job
+				s.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+}
 
 func (s *Server) handleAck(packetID uint16, payload []byte) {
-	ack_count++
-	fmt.Println(ack_count,"Client ack:", string(payload))
+	fmt.Println("Client ack:", string(payload))
 	s.muxPending <- Mutex{Action: "deletePending", PacketID: packetID}
 }
 
@@ -462,9 +430,8 @@ func (s *Server) SendFileToClient(client *Client, filepath string, filename stri
 		copy(payload[4:], chunkData)
 
 		s.packetGenerator(client.Addr, Chunk, payload, 0, nil)
-		// time.Sleep(20 * time.Millisecond)
+		time.Sleep(20 * time.Millisecond)
 	}
-
 	return nil
 }
 
@@ -570,7 +537,7 @@ func (s *Server) Start() {
 	go s.MutexHandleActions()
 	go s.MutexHandleClientActions()
 
-	for i := 0; i < 1; i++ {
+	for i := 0; i < 4; i++ {
 		go s.udpWriteWorker(i)
 		go s.pktGWorker()
 		go s.packetSender()
@@ -578,20 +545,9 @@ func (s *Server) Start() {
 	}
 
 	go s.udpReadWorker()
-	// go s.fieldPacketTrackingWorker()
+	go s.fieldPacketTrackingWorker()
 	go s.MessageFromServerAnyTime()
 
-	time.Sleep(2 * time.Minute)
-		fmt.Println("countWr", counterWriter)
-		fmt.Println("countWr_0", counterWriter_0)
-		fmt.Println("countWr_1200", counterWriter_1200)
-		fmt.Println("countRe", counterReader)
-		fmt.Println("countRe_0", counterReader_0)
-		fmt.Println("countRe_1200", counterReader_1200)
-		fmt.Println("errorRe", errorReader)
-		fmt.Println("errorWr:", errorWriter)
-		fmt.Println("total_writer:", counterWriter+counterWriter_0+counterWriter_1200)
-		fmt.Println("total_reader:", counterReader+counterReader_0+counterReader_1200)
 	select {}
 }
 
@@ -603,5 +559,4 @@ func main() {
 
 	fmt.Println("Server running on port 11000...... :)")
 	s.Start()
-
 }
