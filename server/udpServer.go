@@ -26,8 +26,12 @@ const (
 	//total - (pktID + encDec + msgtype + chunkIndex)
 	ChunkSize = 1200 //65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
 )
-var counterWriter =0
-var counterReader =0
+
+var counterWriter = 0
+var counterReader = 0
+var errorWriter = 0
+var errorReader = 0
+
 type Job struct {
 	Addr   *net.UDPAddr
 	Packet []byte
@@ -125,12 +129,14 @@ func (s *Server) udpWriteWorker(id int) {
 	for {
 		job := <-s.writeQueue
 		n, err := s.conn.WriteToUDP(job.Packet, job.Addr)
-		if n == len(job.Packet){
-			counterWriter+=1
-		}
 		if err != nil {
+			errorWriter += 1
 			fmt.Printf("Writer %d error: %v\n", id, err)
 		}
+		if n == len(job.Packet) {
+			counterWriter += 1
+		}
+
 	}
 }
 
@@ -139,9 +145,14 @@ func (s *Server) udpReadWorker() {
 	for {
 		n, addr, err := s.conn.ReadFromUDP(buf)
 		if err != nil {
+			errorReader += 1
 			fmt.Println("Read error:", err)
 			continue
 		}
+		if n == 1200 {
+			counterReader += 1
+		}
+
 		packet := make([]byte, n)
 		copy(packet, buf[:n])
 		s.parseQueue <- Job{Addr: addr, Packet: packet}
@@ -436,8 +447,6 @@ func (s *Server) SendFileToClient(client *Client, filepath string, filename stri
 		s.packetGenerator(client.Addr, Chunk, payload, 0, nil)
 		// time.Sleep(20 * time.Millisecond)
 	}
-	fmt.Println(counterWriter)
-	fmt.Println(counterReader)
 
 	return nil
 }
@@ -555,6 +564,11 @@ func (s *Server) Start() {
 	// go s.fieldPacketTrackingWorker()
 	go s.MessageFromServerAnyTime()
 
+	time.Sleep(2*time.Minute)
+	fmt.Println("countWr",counterWriter)
+	fmt.Println("countRe",counterReader)
+	fmt.Println("errorRe",errorReader)
+	fmt.Println("errorWr:",errorWriter)
 	select {}
 }
 
@@ -566,4 +580,5 @@ func main() {
 
 	fmt.Println("Server running on port 11000...... :)")
 	s.Start()
+
 }
