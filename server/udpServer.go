@@ -133,7 +133,7 @@ func (s *Server) udpWriteWorker(id int) {
 			errorWriter += 1
 			fmt.Printf("Writer %d error: %v\n", id, err)
 		}
-		if n == len(job.Packet) {
+		if n != len(job.Packet) {
 			counterWriter += 1
 		}
 
@@ -149,7 +149,7 @@ func (s *Server) udpReadWorker() {
 			fmt.Println("Read error:", err)
 			continue
 		}
-		if n == 1200 {
+		if n != 1200 {
 			counterReader += 1
 		}
 
