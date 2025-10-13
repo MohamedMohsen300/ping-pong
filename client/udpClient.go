@@ -134,7 +134,7 @@ func (c *Client) writeWorker(id int) {
 			}
 			counterWriter += 1
 		}else{
-			counterReader_1200+=1
+			counterWriter_1200+=1
 		}
 	}
 }

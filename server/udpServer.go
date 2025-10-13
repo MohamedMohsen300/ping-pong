@@ -26,7 +26,7 @@ const (
 	//total - (pktID + encDec + msgtype + chunkIndex)
 	ChunkSize = 1200 //65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
 )
-
+var ack_count=0
 var counterWriter = 0
 var counterWriter_0 = 0
 var counterWriter_1200 = 0
@@ -414,7 +414,8 @@ func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte, clientAckPacketI
 // }
 
 func (s *Server) handleAck(packetID uint16, payload []byte) {
-	fmt.Println("Client ack:", string(payload))
+	ack_count++
+	fmt.Println(ack_count,"Client ack:", string(payload))
 	s.muxPending <- Mutex{Action: "deletePending", PacketID: packetID}
 }
 
