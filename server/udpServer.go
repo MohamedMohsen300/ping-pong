@@ -440,15 +440,15 @@ func (s *Server) SendFileToClient(client *Client, filepath string, filename stri
 		binary.BigEndian.PutUint32(payload[0:4], uint32(chunkIndex))
 		copy(payload[4:], chunkData)
 
-		ack := make(chan struct{})
-		s.packetGenerator(client.Addr, Chunk, payload, 0, ack)
-		select {
-		case <-ack:
-		case <-time.After(2 * time.Second):
-			fmt.Println("Chunk ack timeout, continuing...")
-			// s.packetGenerator(client.Addr, Chunk, payload, 0, nil)
-			// time.Sleep(time.Millisecond)
-		}
+		// ack := make(chan struct{})
+		// s.packetGenerator(client.Addr, Chunk, payload, 0, ack)
+		// select {
+		// case <-ack:
+		// case <-time.After(2 * time.Second):
+		// 	fmt.Println("Chunk ack timeout, continuing...")
+		s.packetGenerator(client.Addr, Chunk, payload, 0, nil)
+		// time.Sleep(time.Millisecond)
+		// }
 	}
 	return nil
 }

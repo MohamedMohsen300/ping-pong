@@ -422,15 +422,15 @@ func (c *Client) SendFileToServer(path string) error {
 		binary.BigEndian.PutUint32(payload[0:4], uint32(chunkIndex))
 		copy(payload[4:], chunkData)
 
-		ack := make(chan struct{})
-		c.packetGenerator(_chunk, payload, 0, ack, nil)
-		select {
-		case <-ack:
-		case <-time.After(2 * time.Second):
-			fmt.Println("Chunk ack timeout, continuing...")
-			// c.packetGenerator(_chunk, payload, 0, nil, nil)
-			// time.Sleep(time.Millisecond)
-		}
+		// ack := make(chan struct{})
+		// c.packetGenerator(_chunk, payload, 0, ack, nil)
+		// select {
+		// case <-ack:
+		// case <-time.After(2 * time.Second):
+		// 	fmt.Println("Chunk ack timeout, continuing...")
+		c.packetGenerator(_chunk, payload, 0, nil, nil)
+		// time.Sleep(time.Millisecond)
+		// }
 	}
 	return nil
 }
@@ -512,7 +512,7 @@ func (c *Client) Start() {
 }
 
 func main() {
-	client := NewClient("2", "127.0.0.1:11000")
+	client := NewClient("2", "173.208.144.109:11000")
 	client.Start()
 
 	client.Register()
