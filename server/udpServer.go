@@ -188,6 +188,8 @@ func (s *Server) handlePing(addr *net.UDPAddr, clientAckPacketId uint16) {
 	}
 	s.packetGenerator(addr, Ack, []byte("pong"), clientAckPacketId, nil)
 	fmt.Printf("Ping from %s\n", client.ID)
+	fmt.Println("counter_write", counter_write)
+	fmt.Println("counter_read", counter_read)
 }
 
 func (s *Server) handleMessage(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
@@ -354,7 +356,7 @@ func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte, clientAckPacketI
 
 	// ack the chunk to client
 	s.packetGenerator(addr, Ack, []byte(fmt.Sprintf("chunk %d received", idx)), clientAckPacketId, nil)
-	fmt.Printf("Chunk %d received from %s (%d/%d)\n", idx, addr.String(), meta.Received, meta.TotalChunks)
+	// fmt.Printf("Chunk %d received from %s (%d/%d)\n", idx, addr.String(), meta.Received, meta.TotalChunks)
 
 	// if done, close
 	if okm && meta.Received >= meta.TotalChunks {
@@ -436,9 +438,16 @@ func (s *Server) SendFileToClient(client *Client, filepath string, filename stri
 		payload := make([]byte, 4+len(chunkData))
 		binary.BigEndian.PutUint32(payload[0:4], uint32(chunkIndex))
 		copy(payload[4:], chunkData)
-
-		s.packetGenerator(client.Addr, Chunk, payload, 0, nil)
-		// time.Sleep(time.Millisecond)
+		
+		ack := make(chan struct{})
+		s.packetGenerator(client.Addr, Chunk, payload, 0, ack)
+		select {
+		case <-ack:
+		case <-time.After(2 * time.Second):
+			fmt.Println("Chunk ack timeout, continuing...")
+			// s.packetGenerator(client.Addr, Chunk, payload, 0, nil)
+			// time.Sleep(time.Millisecond)
+		}
 	}
 	return nil
 }
@@ -556,9 +565,6 @@ func (s *Server) Start() {
 	// go s.fieldPacketTrackingWorker()
 	go s.MessageFromServerAnyTime()
 
-	time.Sleep(2*time.Minute)
-	fmt.Println("counter_write", counter_write)
-	fmt.Println("counter_read", counter_read)
 	select {}
 }
 

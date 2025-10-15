@@ -26,12 +26,13 @@ const (
 
 	ChunkSize = 1200 //10000//65507 - (2 + 2 + 1 + 4)
 )
+
 //upload
 // download
 
 // server -> client  speed  // download  // we 30 mb  /  100 mb
 
-// client -> server  slow  //upload  // 3 mb  
+// client -> server  slow  //upload  // 3 mb
 
 var counter_write = 0
 var counter_read = 0
@@ -364,7 +365,7 @@ func (c *Client) handleChunk(payload []byte, clientAckPacketId uint16) {
 	}
 
 	c.packetGenerator(_ack, []byte(fmt.Sprintf("chunk %d received", idx)), clientAckPacketId, nil, nil)
-	fmt.Printf("Chunk %d received and written (%d/%d)\n", idx, c.receivedCount, c.totalChunks)
+	// fmt.Printf("Chunk %d received and written (%d/%d)\n", idx, c.receivedCount, c.totalChunks)
 
 	if allDone {
 		f.Close()
@@ -421,20 +422,15 @@ func (c *Client) SendFileToServer(path string) error {
 		binary.BigEndian.PutUint32(payload[0:4], uint32(chunkIndex))
 		copy(payload[4:], chunkData)
 
-		if chunkIndex%10 == 0 {
-			ack := make(chan struct{})
-			c.packetGenerator(_chunk, payload, 0, ack, nil)
-			select {
-			case <-ack:
-			case <-time.After(2 * time.Second):
-				fmt.Println("Chunk ack timeout, continuing...")
-			}
-		} else {
-			c.packetGenerator(_chunk, payload, 0, nil, nil)
+		ack := make(chan struct{})
+		c.packetGenerator(_chunk, payload, 0, ack, nil)
+		select {
+		case <-ack:
+		case <-time.After(2 * time.Second):
+			fmt.Println("Chunk ack timeout, continuing...")
+			// c.packetGenerator(_chunk, payload, 0, nil, nil)
+			// time.Sleep(time.Millisecond)
 		}
-
-		// c.packetGenerator(_chunk, payload, 0, nil, nil)
-		// time.Sleep(time.Millisecond)
 	}
 	return nil
 }
@@ -516,7 +512,7 @@ func (c *Client) Start() {
 }
 
 func main() {
-	client := NewClient("2", "173.208.144.109:11000")
+	client := NewClient("2", "127.0.0.1:11000")
 	client.Start()
 
 	client.Register()
