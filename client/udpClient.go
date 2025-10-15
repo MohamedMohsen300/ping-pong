@@ -134,7 +134,7 @@ func (c *Client) writeWorker(id int) {
 }
 
 func (c *Client) readWorker() {
-	buffer := make([]byte, 65507)
+	buffer := make([]byte, 65507) // in for loop
 	for {
 		n, _, err := c.conn.ReadFromUDP(buffer)
 		if n == 1209 {
@@ -211,7 +211,7 @@ func (c *Client) packetGeneratorWorker() {
 
 		// packetID := uint16(r.Intn(65535))
 		pid := atomic.AddUint32(&c.packetIDCounter, 1)
-		packetID := uint16(pid & 0xFFFF) // احذر overflow لكن monotonic يكفي لتقليل التصادمات
+		packetID := uint16(pid & 0xFFFF)
 
 		binary.BigEndian.PutUint16(packet[2:4], 0)
 		packet[4] = task.MsgType

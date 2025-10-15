@@ -28,7 +28,8 @@ const (
 )
 
 var counter_write = 0
-var counter_read =0
+var counter_read = 0
+
 type Job struct {
 	Addr   *net.UDPAddr
 	Packet []byte
@@ -438,7 +439,7 @@ func (s *Server) SendFileToClient(client *Client, filepath string, filename stri
 		payload := make([]byte, 4+len(chunkData))
 		binary.BigEndian.PutUint32(payload[0:4], uint32(chunkIndex))
 		copy(payload[4:], chunkData)
-		
+
 		ack := make(chan struct{})
 		s.packetGenerator(client.Addr, Chunk, payload, 0, ack)
 		select {
