@@ -134,7 +134,7 @@ func (c *Client) writeWorker(id int) {
 }
 
 func (c *Client) readWorker() {
-	buffer := make([]byte, 65507) // in for loop
+	buffer := make([]byte, 1300) // in for loop
 	for {
 		n, _, err := c.conn.ReadFromUDP(buffer)
 		if n == 1209 {
@@ -147,6 +147,41 @@ func (c *Client) readWorker() {
 		packet := make([]byte, n)
 		copy(packet, buffer[:n])
 		c.parseQueue <- Job{Addr: c.serverAddr, Packet: packet}
+	}
+}
+
+func (c *Client) packetParserWorker() {
+	for {
+		job := <-c.parseQueue
+		c.PacketParser(job.Packet)
+	}
+}
+
+func (c *Client) PacketParser(packet []byte) {
+	if len(packet) < 5 {
+		return
+	}
+
+	packetID := binary.BigEndian.Uint16(packet[0:2])
+	msgType := packet[4]
+	payload := packet[5:]
+
+	switch msgType {
+	case _message:
+		// reply ack to server
+		c.packetGenerator(_ack, []byte("message received"), packetID, nil, nil)
+		fmt.Println("Server:", string(payload))
+
+	case _ack:
+		// remove pending
+		fmt.Println("Server ack:", string(payload))
+		c.muxPending <- Mutex{Action: "deletePending", PacketID: packetID}
+
+	case _metadata:
+		c.handleMetadata(payload, packetID)
+
+	case _chunk:
+		c.handleChunk(payload, packetID)
 	}
 }
 
@@ -185,13 +220,6 @@ func (c *Client) readWorker() {
 
 // 	}
 // }
-
-func (c *Client) packetParserWorker() {
-	for {
-		job := <-c.parseQueue
-		c.PacketParser(job.Packet)
-	}
-}
 
 func (c *Client) packetGenerator(msgType byte, payload []byte, clientAckPacketId uint16, ackChan chan struct{}, resp chan uint16) {
 	task := GenTask{
@@ -254,34 +282,6 @@ func (c *Client) packetGeneratorWorker() {
 		}
 
 		c.writeQueue <- Job{Addr: c.serverAddr, Packet: packet}
-	}
-}
-
-func (c *Client) PacketParser(packet []byte) {
-	if len(packet) < 5 {
-		return
-	}
-
-	packetID := binary.BigEndian.Uint16(packet[0:2])
-	msgType := packet[4]
-	payload := packet[5:]
-
-	switch msgType {
-	case _message:
-		// reply ack to server
-		c.packetGenerator(_ack, []byte("message received"), packetID, nil, nil)
-		fmt.Println("Server:", string(payload))
-
-	case _ack:
-		// remove pending
-		fmt.Println("Server ack:", string(payload))
-		c.muxPending <- Mutex{Action: "deletePending", PacketID: packetID}
-
-	case _metadata:
-		c.handleMetadata(payload, packetID)
-
-	case _chunk:
-		c.handleChunk(payload, packetID)
 	}
 }
 
@@ -429,7 +429,7 @@ func (c *Client) SendFileToServer(path string) error {
 		// case <-time.After(2 * time.Second):
 		// 	fmt.Println("Chunk ack timeout, continuing...")
 		c.packetGenerator(_chunk, payload, 0, nil, nil)
-		// time.Sleep(time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 		// }
 	}
 	return nil
@@ -512,7 +512,8 @@ func (c *Client) Start() {
 }
 
 func main() {
-	client := NewClient("2", "173.208.144.109:11000")
+	//173.208.144.109
+	client := NewClient("2", "127.0.0.1:11000")
 	client.Start()
 
 	client.Register()

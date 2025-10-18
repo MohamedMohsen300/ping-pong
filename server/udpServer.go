@@ -137,7 +137,7 @@ func (s *Server) udpWriteWorker(id int) {
 }
 
 func (s *Server) udpReadWorker() {
-	buf := make([]byte, 65507)
+	buf := make([]byte, 1300)
 	for {
 		n, addr, err := s.conn.ReadFromUDP(buf)
 		if n == 1209 {
@@ -447,7 +447,7 @@ func (s *Server) SendFileToClient(client *Client, filepath string, filename stri
 		// case <-time.After(2 * time.Second):
 		// 	fmt.Println("Chunk ack timeout, continuing...")
 		s.packetGenerator(client.Addr, Chunk, payload, 0, nil)
-		// time.Sleep(time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 		// }
 	}
 	return nil
