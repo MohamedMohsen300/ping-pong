@@ -357,7 +357,7 @@ func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte, clientAckPacketI
 
 	// ack the chunk to client
 	s.packetGenerator(addr, Ack, []byte(fmt.Sprintf("chunk %d received", idx)), clientAckPacketId, nil)
-	// fmt.Printf("Chunk %d received from %s (%d/%d)\n", idx, addr.String(), meta.Received, meta.TotalChunks)
+	fmt.Printf("Chunk %d received from %s (%d/%d)\n", idx, addr.String(), meta.Received, meta.TotalChunks)
 
 	// if done, close
 	if okm && meta.Received >= meta.TotalChunks {

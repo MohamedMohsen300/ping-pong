@@ -24,7 +24,7 @@ const (
 	_metadata = 5
 	_chunk    = 6
 
-	ChunkSize = 65000//1200 //10000//65507 - (2 + 2 + 1 + 4)
+	ChunkSize = 65000 //1200 //10000//65507 - (2 + 2 + 1 + 4)
 )
 
 //upload
@@ -422,15 +422,15 @@ func (c *Client) SendFileToServer(path string) error {
 		binary.BigEndian.PutUint32(payload[0:4], uint32(chunkIndex))
 		copy(payload[4:], chunkData)
 
-		// ack := make(chan struct{})
-		// c.packetGenerator(_chunk, payload, 0, ack, nil)
-		// select {
-		// case <-ack:
-		// case <-time.After(2 * time.Second):
-		// 	fmt.Println("Chunk ack timeout, continuing...")
-		c.packetGenerator(_chunk, payload, 0, nil, nil)
-		time.Sleep(time.Millisecond)
-		// }
+		ack := make(chan struct{})
+		c.packetGenerator(_chunk, payload, 0, ack, nil)
+		select {
+		case <-ack:
+		case <-time.After(10 * time.Second):
+			fmt.Println("Chunk ack timeout, continuing...")
+			// c.packetGenerator(_chunk, payload, 0, nil, nil)
+			// time.Sleep(time.Millisecond)
+		}
 	}
 	return nil
 }
