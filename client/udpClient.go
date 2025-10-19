@@ -24,7 +24,7 @@ const (
 	_metadata = 5
 	_chunk    = 6
 
-	ChunkSize = 1200 //10000//65507 - (2 + 2 + 1 + 4)
+	ChunkSize = 65000//1200 //10000//65507 - (2 + 2 + 1 + 4)
 )
 
 //upload
@@ -134,7 +134,7 @@ func (c *Client) writeWorker(id int) {
 }
 
 func (c *Client) readWorker() {
-	buffer := make([]byte, 1300) // in for loop
+	buffer := make([]byte, 65507) // in for loop
 	for {
 		n, _, err := c.conn.ReadFromUDP(buffer)
 		if n == 1209 {
@@ -429,7 +429,7 @@ func (c *Client) SendFileToServer(path string) error {
 		// case <-time.After(2 * time.Second):
 		// 	fmt.Println("Chunk ack timeout, continuing...")
 		c.packetGenerator(_chunk, payload, 0, nil, nil)
-		time.Sleep(5 * time.Millisecond)
+		time.Sleep(time.Millisecond)
 		// }
 	}
 	return nil
@@ -513,7 +513,7 @@ func (c *Client) Start() {
 
 func main() {
 	//173.208.144.109
-	client := NewClient("2", "127.0.0.1:11000")
+	client := NewClient("2", "173.208.144.109:11000")
 	client.Start()
 
 	client.Register()

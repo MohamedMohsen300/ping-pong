@@ -24,7 +24,7 @@ const (
 	Metadata = 5
 	Chunk    = 6
 	//total - (pktID + encDec + msgtype + chunkIndex)
-	ChunkSize = 1200 //10000 //65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
+	ChunkSize = 65000 //1200 //10000 //65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
 )
 
 var counter_write = 0
@@ -137,7 +137,7 @@ func (s *Server) udpWriteWorker(id int) {
 }
 
 func (s *Server) udpReadWorker() {
-	buf := make([]byte, 1300)
+	buf := make([]byte, 65507)
 	for {
 		n, addr, err := s.conn.ReadFromUDP(buf)
 		if n == 1209 {
