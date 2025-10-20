@@ -22,7 +22,7 @@ const (
 	_metadata = 5
 	_chunk    = 6
 
-	ChunkSize = 65000
+	ChunkSize = 1200
 
 	_requestChunk = 7
 	_done         = 8
@@ -133,7 +133,7 @@ func (c *Client) writeWorker(id int) {
 		}
 	}
 }
-
+// check
 func (c *Client) readWorker() {
 	buffer := make([]byte, 65507)
 	for {
