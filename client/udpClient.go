@@ -24,7 +24,7 @@ const (
 	_requestChunk = 7
 	_done         = 8
 
-	_chunkSize = 65000
+	_chunkSize = 20000
 )
 
 const (
@@ -129,7 +129,7 @@ func (c *Client) writeWorker(id int) {
 	for {
 		job := <-c.writeQueue
 		n, err := c.conn.Write(job.Packet)
-		if n == 1209 {
+		if n == 20009 {
 			counter_write++
 		}
 		if err != nil {
@@ -142,7 +142,7 @@ func (c *Client) readWorker() {
 	buffer := make([]byte, 65507)
 	for {
 		n, _, err := c.conn.ReadFromUDP(buffer)
-		if n == 1209 {
+		if n == 20009 {
 			counter_read++
 		}
 		if err != nil {
