@@ -34,6 +34,7 @@ const (
 
 var counter_write = 0
 var counter_read = 0
+var request=0
 
 type Job struct {
 	Addr   *net.UDPAddr
@@ -347,6 +348,7 @@ func (c *Client) handleChunk(payload []byte) {
 }
 
 func (c *Client) requestChunk(idx int) {
+	request++
 	idxBuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(idxBuf[0:4], uint32(idx))
 	c.packetGenerator(_requestChunk, idxBuf, 0, nil, nil)
@@ -531,8 +533,8 @@ func (c *Client) Start() {
 }
 
 func main() {
-	
-	client := NewClient("2", "127.0.0.1:11000")
+	// 173.208.144.109
+	client := NewClient("2", "173.208.144.109:11000")
 	client.Start()
 
 	client.Register()
@@ -543,6 +545,7 @@ func main() {
 			client.Ping()
 			fmt.Println("counter_write", counter_write)
 			fmt.Println("counter_read", counter_read)
+			fmt.Println("number of requests", request)
 		}
 	}()
 

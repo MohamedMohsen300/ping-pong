@@ -35,6 +35,7 @@ const (
 
 var counter_write = 0
 var counter_read = 0
+var chunkData = 0
 
 type Job struct {
 	Addr   *net.UDPAddr
@@ -208,6 +209,7 @@ func (s *Server) handlePing(addr *net.UDPAddr, clientAckPacketId uint16) {
 	fmt.Printf("Ping from %s\n", client.ID)
 	fmt.Println("counter_write", counter_write)
 	fmt.Println("counter_read", counter_read)
+	fmt.Println("number of chunk data", chunkData)
 }
 
 func (s *Server) handleMessage(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
@@ -401,6 +403,7 @@ func (s *Server) requestChunk(addr *net.UDPAddr, idx int) {
 }
 
 func (s *Server) handleRequestChunk(addr *net.UDPAddr, payload []byte) {
+	chunkData++
 	if len(payload) < 4 {
 		return
 	}
