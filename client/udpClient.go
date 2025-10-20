@@ -22,7 +22,7 @@ const (
 	_metadata = 5
 	_chunk    = 6
 
-	ChunkSize = 1200
+	ChunkSize = 65000
 
 	_requestChunk = 7
 	_done         = 8
@@ -294,7 +294,7 @@ func (c *Client) Ping() {
 func (c *Client) SendMessage(message string) {
 	c.packetGenerator(_message, []byte(message), 0, nil, nil)
 }
-
+//
 func (c *Client) handleMetadata(payload []byte, clientAckPacketId uint16) {
 	// metadata-> filename|totalChunks|chunkSize
 	meta := string(payload)
@@ -329,7 +329,7 @@ func (c *Client) handleMetadata(payload []byte, clientAckPacketId uint16) {
 
 	c.requestChunk(0)
 }
-
+//
 func (c *Client) handleChunk(payload []byte) {
 	if len(payload) < 4 {
 		return
@@ -383,7 +383,7 @@ func (c *Client) handleChunk(payload []byte) {
 	// request next chunk
 	c.requestChunk(idx + 1)
 }
-
+//
 func (c *Client) requestChunk(idx int) {
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf[0:4], uint32(idx))

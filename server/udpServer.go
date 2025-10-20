@@ -24,7 +24,7 @@ const (
 	RequestChunk = 7
 	Done         = 8
 
-	ChunkSize = 1200
+	ChunkSize = 65000
 )
 
 var counter_write = 0
@@ -364,7 +364,7 @@ func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte) {
 		s.requestChunk(addr,nextIdx)
 	}
 }
-
+//
 func (s *Server) requestChunk(addr *net.UDPAddr, idx int) {
 	idxBuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(idxBuf[0:4], uint32(idx))
@@ -393,6 +393,7 @@ func (s *Server) requestChunk(addr *net.UDPAddr, idx int) {
 // 	}
 // }
 
+//
 func (s *Server) handleRequestChunk(addr *net.UDPAddr, payload []byte) {
 	if len(payload) < 4 {
 		return
@@ -428,7 +429,7 @@ func (s *Server) handleRequestChunk(addr *net.UDPAddr, payload []byte) {
 	binary.BigEndian.PutUint32(payloadSend[0:4], uint32(idx))
 	copy(payloadSend[4:], chunkData)
 
-	// send chunk to peer
+	// send chunk
 	s.packetGenerator(addr, Chunk, payloadSend, 0, nil)
 	fmt.Printf("Sent chunk %d to %s (%d bytes)\n", idx, key, len(chunkData))
 }
@@ -447,19 +448,17 @@ func (s *Server) handleDone(addr *net.UDPAddr) {
 	s.filesMu.Unlock()
 }
 
-// handleAck retains original behavior for metadata ACK mapping
 func (s *Server) handleAck(packetID uint16, payload []byte) {
 	fmt.Println("Client ack:", string(payload))
 	s.muxPending <- Mutex{Action: "deletePending", PacketID: packetID}
 }
-
-// SendFileToClient now sends only metadata and stages the file to be sent upon RequestChunk
+//
 func (s *Server) SendFileToClient(client *Client, filepathStr string, filename string) error {
 	f, err := os.Open(filepathStr)
 	if err != nil {
 		return err
 	}
-	// do NOT close here; we'll close on Done or error cleanup
+
 	stat, err := f.Stat()
 	if err != nil {
 		f.Close()
@@ -477,7 +476,6 @@ func (s *Server) SendFileToClient(client *Client, filepathStr string, filename s
 	// wait ack
 	select {
 	case <-metaAck:
-		// stage send file info so handleRequestChunk can serve chunks
 		s.filesMu.Lock()
 		s.sendFiles[client.Addr.String()] = SendFileInfo{
 			FilePath:    filepathStr,
