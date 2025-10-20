@@ -720,29 +720,29 @@ func (c *Client) readWorker() {
 	}
 }
 
-func (c *Client) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
+// func (c *Client) fieldPacketTrackingWorker() {
+// 	ticker := time.NewTicker(2 * time.Second)
+// 	defer ticker.Stop()
 
-	for range ticker.C {
-		now := time.Now()
-		reply := make(chan interface{})
-		c.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
-		pendings := (<-reply).(map[uint16]PendingPacketsJob)
+// 	for range ticker.C {
+// 		now := time.Now()
+// 		reply := make(chan interface{})
+// 		c.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
+// 		pendings := (<-reply).(map[uint16]PendingPacketsJob)
 
-		for packetID, pending := range pendings {
-			rtt := c.rttEstimate.Load().(time.Duration)
-			timeout := rtt * 2
-			if timeout < 800*time.Millisecond {
-				timeout = 800 * time.Millisecond
-			}
-			if now.Sub(pending.LastSend) >= timeout {
-				c.writeQueue <- pending.Job
-				c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
-			}
-		}
-	}
-}
+// 		for packetID, pending := range pendings {
+// 			rtt := c.rttEstimate.Load().(time.Duration)
+// 			timeout := rtt * 2
+// 			if timeout < 800*time.Millisecond {
+// 				timeout = 800 * time.Millisecond
+// 			}
+// 			if now.Sub(pending.LastSend) >= timeout {
+// 				c.writeQueue <- pending.Job
+// 				c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
+// 			}
+// 		}
+// 	}
+// }
 
 func (c *Client) packetParserWorker() {
 	for {
@@ -1005,6 +1005,7 @@ func (c *Client) requestManagerForFile(filename string, totalChunks int) {
 				// received
 				break
 			case <-time.After(timeout):
+				fmt.Println("resend")
 				retries++
 				if retries >= maxRetries {
 					fmt.Printf("Chunk %d failed after %d retries, continuing to next (filename=%s)\n", idx, retries, filename)
@@ -1232,7 +1233,7 @@ func (c *Client) Start() {
 	}
 
 	go c.MutexHandleActions()
-	go c.fieldPacketTrackingWorker()
+	// go c.fieldPacketTrackingWorker()
 }
 
 func main() {

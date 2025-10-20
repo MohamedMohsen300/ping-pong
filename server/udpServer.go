@@ -645,7 +645,7 @@ const (
 	PendingChunk     = 8
 	TransferComplete = 9
 
-	ChunkSize = 1200
+	ChunkSize = 65000
 )
 
 type Job struct {
@@ -1016,26 +1016,26 @@ func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte, clientAckPacketI
 	}
 }
 
-func (s *Server) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(3 * time.Second)
-	defer ticker.Stop()
+// func (s *Server) fieldPacketTrackingWorker() {
+// 	ticker := time.NewTicker(3 * time.Second)
+// 	defer ticker.Stop()
 
-	for range ticker.C {
-		now := time.Now()
+// 	for range ticker.C {
+// 		now := time.Now()
 
-		reply := make(chan interface{})
-		s.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
-		pendings := (<-reply).(map[uint16]PendingPacketsJob)
+// 		reply := make(chan interface{})
+// 		s.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
+// 		pendings := (<-reply).(map[uint16]PendingPacketsJob)
 
-		for packetID, pending := range pendings {
-			if now.Sub(pending.LastSend) >= 1*time.Second {
-				s.builtpackets <- pending.Job
-				s.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
-			}
-			time.Sleep(20 * time.Millisecond)
-		}
-	}
-}
+// 		for packetID, pending := range pendings {
+// 			if now.Sub(pending.LastSend) >= 1*time.Second {
+// 				s.builtpackets <- pending.Job
+// 				s.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
+// 			}
+// 			time.Sleep(20 * time.Millisecond)
+// 		}
+// 	}
+// }
 
 func (s *Server) handleAck(packetID uint16, payload []byte) {
 	fmt.Println("Client ack:", string(payload))
@@ -1254,6 +1254,7 @@ func (s *Server) requestManagerForIncoming(addr *net.UDPAddr, filename string, t
 				// got it
 				break
 			case <-time.After(timeout):
+				fmt.Println("resend")
 				retries++
 				if retries >= maxRetries {
 					fmt.Printf("Request for chunk %d from %s timed out after %d retries\n", idx, addr.String(), retries)
@@ -1318,7 +1319,7 @@ func (s *Server) Start() {
 	}
 
 	go s.udpReadWorker()
-	go s.fieldPacketTrackingWorker()
+	// go s.fieldPacketTrackingWorker()
 	go s.MessageFromServerAnyTime()
 
 	select {}
