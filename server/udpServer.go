@@ -137,7 +137,7 @@ func (s *Server) udpWriteWorker(id int) {
 	for {
 		job := <-s.writeQueue
 		n, err := s.conn.WriteToUDP(job.Packet, job.Addr)
-		if n == 1209 {
+		if n == 65009 {
 			counter_write++
 		}
 		if err != nil {
@@ -150,7 +150,7 @@ func (s *Server) udpReadWorker() {
 	buf := make([]byte, 65507)
 	for {
 		n, addr, err := s.conn.ReadFromUDP(buf)
-		if n == 1209 {
+		if n == 65009 {
 			counter_read++
 		}
 		if err != nil {

@@ -88,7 +88,7 @@ type Client struct {
 	fileHandle     *os.File
 	receivedChunks map[string]map[int]bool
 
-	// file sending (when this client acts as sender)
+	// file sending
 	sendFilePath    string
 	sendFileName    string
 	sendFileHandle  *os.File
@@ -130,7 +130,7 @@ func (c *Client) writeWorker(id int) {
 	for {
 		job := <-c.writeQueue
 		n, err := c.conn.Write(job.Packet)
-		if n == 1209 {
+		if n == 65009 {
 			counter_write++
 		}
 		if err != nil {
@@ -144,7 +144,7 @@ func (c *Client) readWorker() {
 	buffer := make([]byte, 65507)
 	for {
 		n, _, err := c.conn.ReadFromUDP(buffer)
-		if n == 1209 {
+		if n == 65009 {
 			counter_read++
 		}
 		if err != nil {
