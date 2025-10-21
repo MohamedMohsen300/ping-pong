@@ -194,7 +194,7 @@ func (c *Client) PacketParser(packet []byte) {
 
 	case _requestChunk:
 		// peer requested a chunk (we are sender)
-		c.handleRequestChunk(payload)
+		c.handleRequestChunk(payload,packetID)
 
 	case _done:
 		// peer indicates transfer complete
@@ -415,7 +415,7 @@ func (c *Client) SendFileToServer(path string) error {
 	return nil
 }
 
-func (c *Client) handleRequestChunk(payload []byte) {
+func (c *Client) handleRequestChunk(payload []byte,clientAckPacketId uint16) {
 	if len(payload) < 4 {
 		return
 	}
@@ -453,7 +453,7 @@ func (c *Client) handleRequestChunk(payload []byte) {
 	copy(payloadSend[4:], chunkData)
 
 	// send chunk to server
-	c.packetGenerator(_chunk, payloadSend, 0, nil, nil)
+	c.packetGenerator(_chunk, payloadSend, clientAckPacketId, nil, nil)
 	fmt.Printf("Sent chunk %d (%d bytes)\n", idx, len(chunkData))
 }
 
