@@ -170,6 +170,49 @@ func (s *Server) packetSender() {
 	}
 }
 
+func (s *Server) handleRegister(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
+	id := string(payload)
+	s.muxClient <- Mutex{Action: "registration", Addr: addr, Id: id}
+	s.packetGenerator(addr, Ack, []byte("Registered success"), clientAckPacketId, nil)
+	fmt.Println("Registered client:", id, addr)
+}
+
+func (s *Server) getClientByAddr(addr *net.UDPAddr) *Client {
+	reply := make(chan interface{})
+	s.muxClient <- Mutex{Action: "clientByAddr", Addr: addr, Reply: reply}
+	client := (<-reply).(*Client)
+	return client
+}
+
+func (s *Server) getClientById(id string) *Client {
+	reply := make(chan interface{})
+	s.muxClient <- Mutex{Action: "clientByID", Id: id, Reply: reply}
+	client, _ := (<-reply).(*Client)
+	return client
+}
+
+func (s *Server) handlePing(addr *net.UDPAddr, clientAckPacketId uint16) {
+	client := s.getClientByAddr(addr)
+	if client == nil {
+		fmt.Println("Ping from unknown client:", addr)
+		return
+	}
+	s.packetGenerator(addr, Ack, []byte("pong"), clientAckPacketId, nil)
+	fmt.Printf("Ping from %s\n", client.ID)
+	fmt.Println("counter_write", counter_write)
+	fmt.Println("counter_read", counter_read)
+}
+
+func (s *Server) handleMessage(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
+	client := s.getClientByAddr(addr)
+	if client == nil {
+		fmt.Println("Message from unknown client:", addr)
+		return
+	}
+	s.packetGenerator(addr, Ack, []byte("message received"), clientAckPacketId, nil)
+	fmt.Printf("Message from %s: %s\n", client.ID, string(payload))
+}
+
 func (s *Server) packetGenerator(addr *net.UDPAddr, msgType byte, payload []byte, clientAckPacketId uint16, ackChan chan struct{}) {
 	task := GenTask{Addr: addr, MsgType: msgType, Payload: payload, ClientAckPacketId: clientAckPacketId, AckChan: ackChan}
 	s.genQueue <- task
@@ -237,56 +280,6 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 	}
 }
 
-// handle operation
-
-func (s *Server) handleRegister(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
-	id := string(payload)
-	s.muxClient <- Mutex{Action: "registration", Addr: addr, Id: id}
-	s.packetGenerator(addr, Ack, []byte("Registered success"), clientAckPacketId, nil)
-	fmt.Println("Registered client:", id, addr)
-}
-
-func (s *Server) getClientByAddr(addr *net.UDPAddr) *Client {
-	reply := make(chan interface{})
-	s.muxClient <- Mutex{Action: "clientByAddr", Addr: addr, Reply: reply}
-	client := (<-reply).(*Client)
-	return client
-}
-
-func (s *Server) getClientById(id string) *Client {
-	reply := make(chan interface{})
-	s.muxClient <- Mutex{Action: "clientByID", Id: id, Reply: reply}
-	client, _ := (<-reply).(*Client)
-	return client
-}
-
-func (s *Server) handlePing(addr *net.UDPAddr, clientAckPacketId uint16) {
-	client := s.getClientByAddr(addr)
-	if client == nil {
-		fmt.Println("Ping from unknown client:", addr)
-		return
-	}
-	s.packetGenerator(addr, Ack, []byte("pong"), clientAckPacketId, nil)
-	fmt.Printf("Ping from %s\n", client.ID)
-	fmt.Println("counter_write", counter_write)
-	fmt.Println("counter_read", counter_read)
-}
-
-func (s *Server) handleMessage(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
-	client := s.getClientByAddr(addr)
-	if client == nil {
-		fmt.Println("Message from unknown client:", addr)
-		return
-	}
-	s.packetGenerator(addr, Ack, []byte("message received"), clientAckPacketId, nil)
-	fmt.Printf("Message from %s: %s\n", client.ID, string(payload))
-}
-
-func (s *Server) handleAck(packetID uint16, payload []byte) {
-	fmt.Println("Client ack:", string(payload))
-	s.muxPending <- Mutex{Action: "deletePending", PacketID: packetID}
-}
-
 func (s *Server) fieldPacketTrackingWorker() {
 	ticker := time.NewTicker(4 * time.Second)
 	defer ticker.Stop()
@@ -308,56 +301,6 @@ func (s *Server) fieldPacketTrackingWorker() {
 		}
 	}
 }
-
-// sendfile
-// meta
-func (s *Server) SendFileToClient(client *Client, filepathStr string, filename string) error {
-	f, err := os.Open(filepathStr)
-	if err != nil {
-		return err
-	}
-
-	stat, err := f.Stat()
-	if err != nil {
-		f.Close()
-		return err
-	}
-
-	fileSize := stat.Size()
-	totalChunks := int((fileSize + int64(ChunkSize) - 1) / int64(ChunkSize))
-
-	/// send metadata
-	metadataStr := fmt.Sprintf("%s|%d|%d", filename, totalChunks, ChunkSize)
-	metaAck := make(chan struct{})
-	s.packetGenerator(client.Addr, Metadata, []byte(metadataStr), 0, metaAck)
-
-	// wait ack
-	select {
-	case <-metaAck:
-		s.filesMu.Lock()
-		s.sendFiles[client.Addr.String()] = SendFileInfo{
-			FilePath:    filepathStr,
-			FileHandle:  f,
-			TotalChunks: totalChunks,
-			ChunkSize:   ChunkSize,
-		}
-		s.filesMu.Unlock()
-		fmt.Println("Metadata ack received, sender staged and waiting for chunk requests")
-	case <-time.After(20 * time.Second):
-		f.Close()
-		return fmt.Errorf("timeout waiting metadata ack")
-	}
-
-	return nil
-}
-
-func (s *Server) requestChunk(addr *net.UDPAddr, idx int) {
-	idxBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(idxBuf[0:4], uint32(idx))
-	s.packetGenerator(addr, RequestChunk, idxBuf, 0, nil)
-}
-
-// handle file
 
 func (s *Server) handleMetadata(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
 	// payload: filename|totalChunks|chunkSize
@@ -447,6 +390,12 @@ func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte, clientAckPacketI
 	}
 }
 
+func (s *Server) requestChunk(addr *net.UDPAddr, idx int) {
+	idxBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(idxBuf[0:4], uint32(idx))
+	s.packetGenerator(addr, RequestChunk, idxBuf, 0, nil)
+}
+
 func (s *Server) handleRequestChunk(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
 	if len(payload) < 4 {
 		return
@@ -502,7 +451,50 @@ func (s *Server) handleDone(addr *net.UDPAddr, clientAckPacketId uint16) {
 	s.packetGenerator(addr, Ack, []byte("done"), clientAckPacketId, nil)
 }
 
-// organization
+func (s *Server) handleAck(packetID uint16, payload []byte) {
+	fmt.Println("Client ack:", string(payload))
+	s.muxPending <- Mutex{Action: "deletePending", PacketID: packetID}
+}
+
+func (s *Server) SendFileToClient(client *Client, filepathStr string, filename string) error {
+	f, err := os.Open(filepathStr)
+	if err != nil {
+		return err
+	}
+
+	stat, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return err
+	}
+
+	fileSize := stat.Size()
+	totalChunks := int((fileSize + int64(ChunkSize) - 1) / int64(ChunkSize))
+
+	/// send metadata
+	metadataStr := fmt.Sprintf("%s|%d|%d", filename, totalChunks, ChunkSize)
+	metaAck := make(chan struct{})
+	s.packetGenerator(client.Addr, Metadata, []byte(metadataStr), 0, metaAck)
+
+	// wait ack
+	select {
+	case <-metaAck:
+		s.filesMu.Lock()
+		s.sendFiles[client.Addr.String()] = SendFileInfo{
+			FilePath:    filepathStr,
+			FileHandle:  f,
+			TotalChunks: totalChunks,
+			ChunkSize:   ChunkSize,
+		}
+		s.filesMu.Unlock()
+		fmt.Println("Metadata ack received, sender staged and waiting for chunk requests")
+	case <-time.After(20 * time.Second):
+		f.Close()
+		return fmt.Errorf("timeout waiting metadata ack")
+	}
+
+	return nil
+}
 
 func (s *Server) MutexHandleClientActions() {
 	for mu := range s.muxClient {
