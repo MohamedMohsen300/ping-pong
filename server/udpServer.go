@@ -276,7 +276,7 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 	case RequestChunk:
 		s.handleRequestChunk(addr, payload,packetID)
 	case Done:
-		s.handleDone(addr)
+		s.handleDone(addr,packetID)
 	}
 }
 
@@ -414,7 +414,7 @@ func (s *Server) handleRequestChunk(addr *net.UDPAddr, payload []byte,clientAckP
 	fmt.Printf("Sent chunk %d to %s (%d bytes)\n", idx, key, len(chunkData))
 }
 
-func (s *Server) handleDone(addr *net.UDPAddr) {
+func (s *Server) handleDone(addr *net.UDPAddr,clientAckPacketId uint16) {
 	// peer indicates they received entire file (if we were sender, cleanup send state)
 	key := addr.String()
 	s.filesMu.Lock()
@@ -426,6 +426,7 @@ func (s *Server) handleDone(addr *net.UDPAddr) {
 		fmt.Printf("Cleanup send state for %s (file %s)\n", key, info.FilePath)
 	}
 	s.filesMu.Unlock()
+	s.packetGenerator(addr, Ack,[]byte("done"), clientAckPacketId, nil)
 }
 
 func (s *Server) handleAck(packetID uint16, payload []byte) {

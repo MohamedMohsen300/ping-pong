@@ -198,7 +198,7 @@ func (c *Client) PacketParser(packet []byte) {
 
 	case _done:
 		// peer indicates transfer complete
-		c.handleDone()
+		c.handleDone(packetID)
 	}
 }
 
@@ -457,9 +457,7 @@ func (c *Client) handleRequestChunk(payload []byte,clientAckPacketId uint16) {
 	fmt.Printf("Sent chunk %d (%d bytes)\n", idx, len(chunkData))
 }
 
-func (c *Client) handleDone() {
-	fmt.Println("Done for transfer")
-
+func (c *Client) handleDone(clientAckPacketId uint16) {
 	// close any send file and cleanup
 	c.mux.Lock()
 	if c.sendFileHandle != nil {
@@ -471,6 +469,9 @@ func (c *Client) handleDone() {
 	c.sendTotalChunks = 0
 	c.sendChunkSize = 0
 	c.mux.Unlock()
+
+	c.packetGenerator(_ack, []byte("done"), clientAckPacketId, nil, nil)
+	fmt.Println("Done for transfer")
 }
 
 func (c *Client) MutexHandleActions() {
