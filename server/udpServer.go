@@ -25,7 +25,7 @@ const (
 	RequestChunk = 7
 	Done         = 8
 
-	ChunkSize = 1200
+	ChunkSize = 65000
 )
 
 var counter_write = 0
