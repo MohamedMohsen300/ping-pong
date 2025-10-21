@@ -229,7 +229,7 @@ func (s *Server) pktGWorker() {
 		packet[4] = task.MsgType
 		copy(packet[5:], task.Payload)
 
-		if task.MsgType != Ack || task.MsgType !=Chunk{
+		if task.MsgType != Ack && task.MsgType !=Chunk{
 			binary.BigEndian.PutUint16(packet[0:2], packetID)
 			s.muxPending <- Mutex{Action: "addPending", PacketID: packetID, Addr: task.Addr, Packet: packet}
 			if task.AckChan != nil {
@@ -274,7 +274,7 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 	case Chunk:
 		s.handleChunk(addr, payload,packetID)
 	case RequestChunk:
-		s.handleRequestChunk(addr, payload)
+		s.handleRequestChunk(addr, payload,packetID)
 	case Done:
 		s.handleDone(addr)
 	}
@@ -374,7 +374,7 @@ func (s *Server) requestChunk(addr *net.UDPAddr, idx int) {
 	s.packetGenerator(addr, RequestChunk, idxBuf, 0, nil)
 }
 
-func (s *Server) handleRequestChunk(addr *net.UDPAddr, payload []byte) {
+func (s *Server) handleRequestChunk(addr *net.UDPAddr, payload []byte,clientAckPacketId uint16) {
 	if len(payload) < 4 {
 		return
 	}
@@ -410,7 +410,7 @@ func (s *Server) handleRequestChunk(addr *net.UDPAddr, payload []byte) {
 	copy(payloadSend[4:], chunkData)
 
 	// send chunk
-	s.packetGenerator(addr, Chunk, payloadSend, 0, nil)
+	s.packetGenerator(addr, Chunk, payloadSend, clientAckPacketId, nil)
 	fmt.Printf("Sent chunk %d to %s (%d bytes)\n", idx, key, len(chunkData))
 }
 
