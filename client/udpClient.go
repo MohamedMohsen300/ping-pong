@@ -33,9 +33,6 @@ const (
 	timeout    = 3 * time.Second
 )
 
-var counter_write = 0
-var counter_read = 0
-
 type Job struct {
 	Addr   *net.UDPAddr
 	Packet []byte
@@ -129,10 +126,8 @@ func NewClient(id string, server string) *Client {
 func (c *Client) writeWorker(id int) {
 	for {
 		job := <-c.writeQueue
-		n, err := c.conn.Write(job.Packet)
-		if n == 65009 {
-			counter_write++
-		}
+		_, err := c.conn.Write(job.Packet)
+		
 		if err != nil {
 			fmt.Printf("Writer %d error: %v\n", id, err)
 		}
@@ -144,9 +139,6 @@ func (c *Client) readWorker() {
 	buffer := make([]byte, 65507)
 	for {
 		n, _, err := c.conn.ReadFromUDP(buffer)
-		if n == 65009 {
-			counter_read++
-		}
 		if err != nil {
 			fmt.Println("Error receiving:", err)
 			continue
@@ -252,7 +244,7 @@ func (c *Client) packetGeneratorWorker() {
 }
 
 func (c *Client) fieldPacketTrackingWorker() {
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(4 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -587,8 +579,6 @@ func main() {
 	go func() {
 		for range ticker.C {
 			client.Ping()
-			fmt.Println("counter_write", counter_write)
-			fmt.Println("counter_read", counter_read)
 		}
 	}()
 
