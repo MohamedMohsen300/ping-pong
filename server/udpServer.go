@@ -229,9 +229,9 @@ func (s *Server) pktGWorker() {
 		packet[4] = task.MsgType
 		copy(packet[5:], task.Payload)
 
-		if task.MsgType != Ack {
+		if task.MsgType != Ack && task.MsgType !=Chunk{
 			binary.BigEndian.PutUint16(packet[0:2], packetID)
-			// s.muxPending <- Mutex{Action: "addPending", PacketID: packetID, Addr: task.Addr, Packet: packet}
+			s.muxPending <- Mutex{Action: "addPending", PacketID: packetID, Addr: task.Addr, Packet: packet}
 			if task.AckChan != nil {
 				s.muxClient <- Mutex{Action: "registerAckMetadata", PacketID: packetID, AckChan: task.AckChan}
 			}
@@ -272,7 +272,7 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 	case Metadata:
 		s.handleMetadata(addr, payload, packetID)
 	case Chunk:
-		s.handleChunk(addr, payload)
+		s.handleChunk(addr, payload,packetID)
 	case RequestChunk:
 		s.handleRequestChunk(addr, payload)
 	case Done:
@@ -319,7 +319,9 @@ func (s *Server) handleMetadata(addr *net.UDPAddr, payload []byte, clientAckPack
 	s.requestChunk(addr, 0)
 }
 
-func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte) {
+func (s *Server) handleChunk(addr *net.UDPAddr, payload []byte,clientAckPacketId uint16) {
+	s.muxPending <- Mutex{Action: "deletePending", PacketID: clientAckPacketId}
+
 	if len(payload) < 4 {
 		return
 	}
@@ -574,6 +576,7 @@ func (s *Server) Start() {
 		go s.packetParserWorker()
 	}
 
+	go s.fieldPacketTrackingWorker()
 	go s.udpReadWorker()
 	go s.MessageFromServerAnyTime()
 
@@ -604,24 +607,24 @@ func main() {
 
 
 
-// func (s *Server) fieldPacketTrackingWorker() {
-// 	ticker := time.NewTicker(3 * time.Second)
-// 	defer ticker.Stop()
+func (s *Server) fieldPacketTrackingWorker() {
+	ticker := time.NewTicker(4 * time.Second)
+	defer ticker.Stop()
 
-// 	for range ticker.C {
-// 		now := time.Now()
+	for range ticker.C {
+		now := time.Now()
 
-// 		reply := make(chan interface{})
-// 		s.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
-// 		pendings := (<-reply).(map[uint16]PendingPacketsJob)
+		reply := make(chan interface{})
+		s.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
+		pendings := (<-reply).(map[uint16]PendingPacketsJob)
 
-// 		for packetID, pending := range pendings {
-// 			if now.Sub(pending.LastSend) >= 1*time.Second {
-// 				// fmt.Printf("Retransmitting packet %d\n", packetID)
-// 				s.builtpackets <- pending.Job
-// 				s.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
-// 			}
-// 			time.Sleep(20 * time.Millisecond)
-// 		}
-// 	}
-// }
+		for packetID, pending := range pendings {
+			if now.Sub(pending.LastSend) >= 2*time.Second {
+				// fmt.Printf("Retransmitting packet %d\n", packetID)
+				s.builtpackets <- pending.Job
+				s.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+}

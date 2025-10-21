@@ -65,7 +65,6 @@ type PendingPacketsJob struct {
 }
 
 type Client struct {
-	done           chan string
 	id             string
 	serverAddr     *net.UDPAddr
 	conn           *net.UDPConn
@@ -109,7 +108,6 @@ func NewClient(id string, server string) *Client {
 	}
 
 	c := &Client{
-		done:           make(chan string, 1),
 		id:             id,
 		serverAddr:     addr,
 		conn:           conn,
@@ -192,7 +190,7 @@ func (c *Client) PacketParser(packet []byte) {
 
 	case _chunk:
 		// server (or peer) sent us a chunk (we are receiver)
-		c.handleChunk(payload)
+		c.handleChunk(payload,packetID)
 
 	case _requestChunk:
 		// peer requested a chunk (we are sender)
@@ -226,24 +224,24 @@ func (c *Client) packetGeneratorWorker() {
 		packet[4] = task.MsgType
 		copy(packet[5:], task.Payload)
 
-		if task.MsgType != _ack {
+		if task.MsgType != _ack && task.MsgType!=_chunk{
 			binary.BigEndian.PutUint16(packet[0:2], packetID)
-			// c.muxPending <- Mutex{Action: "addPending", PacketID: packetID, Packet: packet}
-			// if task.AckChan != nil {
-			// 	go func(pid uint16, ackCh chan struct{}) {
-			// 		for {
-			// 			snap := c.snapshot.Load().(map[uint16]PendingPacketsJob)
-			// 			if _, ok := snap[pid]; !ok {
-			// 				close(ackCh)
-			// 				return
-			// 			}
-			// 			time.Sleep(100 * time.Millisecond)
-			// 		}
-			// 	}(packetID, task.AckChan)
-			// }
-			// if task.RespChan != nil {
-			// 	task.RespChan <- packetID
-			// }
+			c.muxPending <- Mutex{Action: "addPending", PacketID: packetID, Packet: packet}
+			if task.AckChan != nil {
+				go func(pid uint16, ackCh chan struct{}) {
+					for {
+						snap := c.snapshot.Load().(map[uint16]PendingPacketsJob)
+						if _, ok := snap[pid]; !ok {
+							close(ackCh)
+							return
+						}
+						time.Sleep(100 * time.Millisecond)
+					}
+				}(packetID, task.AckChan)
+			}
+			if task.RespChan != nil {
+				task.RespChan <- packetID
+			}
 		} else {
 			// for ack or metadata/ack-like, use given client ack id
 			binary.BigEndian.PutUint16(packet[0:2], task.ClientAckPacketId)
@@ -303,7 +301,8 @@ func (c *Client) handleMetadata(payload []byte, clientAckPacketId uint16) {
 	c.requestChunk(0)
 }
 
-func (c *Client) handleChunk(payload []byte) {
+func (c *Client) handleChunk(payload []byte,clientAckPacketId uint16) {
+	c.muxPending <- Mutex{Action: "deletePending", PacketID: clientAckPacketId}
 	if len(payload) < 4 {
 		return
 	}
@@ -352,7 +351,6 @@ func (c *Client) handleChunk(payload []byte) {
 		fmt.Printf("File saved from server: fromServer_%s\n", filename)
 		return
 	}
-	c.done <-"done"
 	// request next chunk
 	c.requestChunk(idx + 1)
 }
@@ -360,17 +358,7 @@ func (c *Client) handleChunk(payload []byte) {
 func (c *Client) requestChunk(idx int) {
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf[0:4], uint32(idx))
-
-	for attempt := 0; attempt < maxRetries; attempt++ {
     c.packetGenerator(_requestChunk, buf, 0, nil, nil)
-    select {
-    case <-c.done:
-        return
-    case <-time.After(timeout):
-		fmt.Printf("timeout index: %d",idx)
-	}
-}
-
 }
 
 func (c *Client) SendFileToServer(path string) error {
@@ -548,6 +536,7 @@ func (c *Client) Start() {
 		go c.packetParserWorker()
 	}
 
+	go c.fieldPacketTrackingWorker()
 	go c.MutexHandleActions()
 }
 
@@ -583,38 +572,38 @@ func main() {
 	}
 }
 
-// func (c *Client) fieldPacketTrackingWorker() {
-// 	ticker := time.NewTicker(2 * time.Second)
-// 	defer ticker.Stop()
+func (c *Client) fieldPacketTrackingWorker() {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
 
-// 	for range ticker.C {
-// 		now := time.Now()
-// 		reply := make(chan interface{})
-// 		c.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
-// 		pendings := (<-reply).(map[uint16]PendingPacketsJob)
+	for range ticker.C {
+		now := time.Now()
+		reply := make(chan interface{})
+		c.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
+		pendings := (<-reply).(map[uint16]PendingPacketsJob)
 
-// 		// for packetID, pending := range pendings {
-// 		// 	if now.Sub(pending.LastSend) >= 1*time.Second {
-// 		// 		fmt.Printf("Retransmitting packet %d\n", packetID)
-// 		// 		c.writeQueue <- pending.Job
-// 		// 		c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
-// 		// 	}
-// 		// 	time.Sleep(20 * time.Millisecond)
-// 		// }
-// 		for packetID, pending := range pendings {
-// 			// compute retransmit timeout from rttEstimate
-// 			rtt := c.rttEstimate.Load().(time.Duration)
-// 			timeout := rtt * 2
-// 			if timeout < 800*time.Millisecond {
-// 				timeout = 800 * time.Millisecond
-// 			}
-// 			if now.Sub(pending.LastSend) >= timeout {
-// 				// fmt.Printf("Retransmitting packet %d\n", packetID)
-// 				c.writeQueue <- pending.Job
-// 				c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
-// 			}
-// 			time.Sleep(20 * time.Millisecond)
-// 		}
+		// for packetID, pending := range pendings {
+		// 	if now.Sub(pending.LastSend) >= 1*time.Second {
+		// 		fmt.Printf("Retransmitting packet %d\n", packetID)
+		// 		c.writeQueue <- pending.Job
+		// 		c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
+		// 	}
+		// 	time.Sleep(20 * time.Millisecond)
+		// }
+		for packetID, pending := range pendings {
+			// compute retransmit timeout from rttEstimate
+			rtt := c.rttEstimate.Load().(time.Duration)
+			timeout := rtt * 2
+			if timeout < 800*time.Millisecond {
+				timeout = 800 * time.Millisecond
+			}
+			if now.Sub(pending.LastSend) >= timeout {
+				// fmt.Printf("Retransmitting packet %d\n", packetID)
+				c.writeQueue <- pending.Job
+				c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
 
-// 	}
-// }
+	}
+}
