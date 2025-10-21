@@ -224,7 +224,7 @@ func (c *Client) packetGeneratorWorker() {
 		packet[4] = task.MsgType
 		copy(packet[5:], task.Payload)
 
-		if task.MsgType != _ack && task.MsgType!=_chunk{
+		if task.MsgType != _ack || task.MsgType!=_chunk{
 			binary.BigEndian.PutUint16(packet[0:2], packetID)
 			c.muxPending <- Mutex{Action: "addPending", PacketID: packetID, Packet: packet}
 			if task.AckChan != nil {

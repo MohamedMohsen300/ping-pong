@@ -229,7 +229,7 @@ func (s *Server) pktGWorker() {
 		packet[4] = task.MsgType
 		copy(packet[5:], task.Payload)
 
-		if task.MsgType != Ack && task.MsgType !=Chunk{
+		if task.MsgType != Ack || task.MsgType !=Chunk{
 			binary.BigEndian.PutUint16(packet[0:2], packetID)
 			s.muxPending <- Mutex{Action: "addPending", PacketID: packetID, Addr: task.Addr, Packet: packet}
 			if task.AckChan != nil {
