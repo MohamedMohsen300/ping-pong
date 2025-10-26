@@ -263,13 +263,13 @@ func (c *Client) PacketParser(packet []byte) {
 	case _request_chunk:
 		c.handleRequestChunk(payload, packetID)
 	case _pending_chunk:
-		c.handlePendingChunk(payload)
+		c.handlePendingChunk(payload, packetID)
 	case _transfer_complete:
-		c.handleTransferComplete(payload)
+		c.handleTransferComplete(payload, packetID)
 	case _request_status:
 		c.handleRequestStatus(payload, packetID)
 	case _in_progress, _already_sent, _not_received:
-		c.handleStatusResponse(msgType, payload)
+		c.handleStatusResponse(msgType, payload, packetID)
 	}
 }
 func (c *Client) Register() {
@@ -357,7 +357,7 @@ func (c *Client) handleChunk(payload []byte, clientAckPacketId uint16) {
 		c.waitStateChan <- WaitCommand{Action: "clearStatus", Key: uuid}
 	}
 }
-func (c *Client) requestManagerForFile(uuid string, totalChunks int) {
+func (c *Client) requestManagerForFile(uuid string, totalChunks int, chunkSize int) {
 	timeout := 60 * time.Second
 	maxRetries := 5
 	for idx := 0; idx < totalChunks; idx++ {
@@ -378,7 +378,7 @@ func (c *Client) requestManagerForFile(uuid string, totalChunks int) {
 			ch := (<-replyW).(chan struct{})
 			select {
 			case <-ch:
-				return
+				break
 			case <-time.After(timeout):
 				// Send status request
 				replyS := make(chan any)
@@ -402,7 +402,7 @@ func (c *Client) requestManagerForFile(uuid string, totalChunks int) {
 				}
 				if retries >= maxRetries {
 					fmt.Printf("Chunk %d failed after %d retries, continuing to next (uuid=%s)\n", idx, retries, uuid)
-					return
+					break
 				}
 			}
 			replyIs2 := make(chan any)
@@ -537,7 +537,7 @@ func (c *Client) handleRequestStatus(payload []byte, clientAckPacketId uint16) {
 	}
 	c.packetGenerator(_already_sent, payload, clientAckPacketId, nil, nil)
 }
-func (c *Client) handleStatusResponse(msgType byte, payload []byte) {
+func (c *Client) handleStatusResponse(msgType byte, payload []byte, clientAckPacketId uint16) {
 	if len(payload) < 4+UUIDLen {
 		return
 	}
@@ -545,10 +545,10 @@ func (c *Client) handleStatusResponse(msgType byte, payload []byte) {
 	uuid := string(payload[4 : 4+UUIDLen])
 	c.waitStateChan <- WaitCommand{Action: "notifyStatus", Key: uuid, Idx: idx, Status: msgType}
 }
-func (c *Client) handlePendingChunk(payload []byte) {
+func (c *Client) handlePendingChunk(payload []byte, clientAckPacketId uint16) {
 	fmt.Println("Received pending info:", string(payload))
 }
-func (c *Client) handleTransferComplete(payload []byte) {
+func (c *Client) handleTransferComplete(payload []byte, clientAckPacketId uint16) {
 	uuid := string(payload)
 	replyMeta := make(chan any)
 	c.serveStateChan <- ServeCommand{Action: "getMeta", Key: uuid, Reply: replyMeta}
@@ -800,7 +800,7 @@ func (c *Client) receivingWorker() {
 		replyMeta := make(chan any)
 		c.receivingStateChan <- ReceivingCommand{Action: "getMeta", Key: uuid, Reply: replyMeta}
 		meta := (<-replyMeta).(FileMeta)
-		c.requestManagerForFile(uuid, meta.TotalChunks)
+		c.requestManagerForFile(uuid, meta.TotalChunks, meta.ChunkSize)
 	}
 }
 func (c *Client) Start() {
@@ -824,7 +824,7 @@ func (c *Client) Start() {
 	go c.fieldPacketTrackingWorker()
 }
 func main() {
-	client := NewClient("2", "173.208.144.109:10000") //127.0.0.1   //173.208.144.109
+	client := NewClient("2", "173.208.144.109:11000") //127.0.0.1   //173.208.144.109
 	client.Start()
 	client.Register()
 	ticker := time.NewTicker(28 * time.Second)

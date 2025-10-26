@@ -283,11 +283,11 @@ func (s *Server) PacketParser(addr *net.UDPAddr, packet []byte) {
 	case PendingChunk:
 		fmt.Println("Received pending from", addr, string(payload))
 	case TransferComplete:
-		s.handleTransferComplete(addr, payload)
+		s.handleTransferComplete(addr, payload, packetID)
 	case RequestStatus:
 		s.handleRequestStatus(addr, payload, packetID)
 	case InProgress, AlreadySent, NotReceived:
-		s.handleStatusResponse(msgType, payload)
+		s.handleStatusResponse(addr, msgType, payload, packetID)
 	}
 }
 func (s *Server) handleMetadata(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
@@ -505,7 +505,7 @@ func (s *Server) handleRequestStatus(addr *net.UDPAddr, payload []byte, clientAc
 	}
 	s.packetGenerator(addr, AlreadySent, payload, clientAckPacketId, nil)
 }
-func (s *Server) handleStatusResponse(msgType byte, payload []byte) {
+func (s *Server) handleStatusResponse(addr *net.UDPAddr, msgType byte, payload []byte, clientAckPacketId uint16) {
 	if len(payload) < 4+UUIDLen {
 		return
 	}
@@ -513,7 +513,7 @@ func (s *Server) handleStatusResponse(msgType byte, payload []byte) {
 	uuid := string(payload[4 : 4+UUIDLen])
 	s.waitStateChan <- WaitCommand{Action: "notifyStatus", Key: uuid, Idx: idx, Status: msgType}
 }
-func (s *Server) handleTransferComplete(addr *net.UDPAddr, payload []byte) {
+func (s *Server) handleTransferComplete(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
 	uuid := string(payload)
 	replyMeta := make(chan any)
 	s.serveStateChan <- ServeCommand{Action: "getMeta", Key: uuid, Reply: replyMeta}
@@ -764,7 +764,7 @@ func (s *Server) updatePendingSnapshot() {
 	}
 	s.snapshot.Store(cp)
 }
-func (s *Server) requestManagerForIncoming(addr *net.UDPAddr, uuid string, totalChunks int) {
+func (s *Server) requestManagerForIncoming(addr *net.UDPAddr, uuid string, totalChunks int, chunkSize int) {
 	timeout := 60 * time.Second
 	maxRetries := 5
 	for idx := 0; idx < totalChunks; idx++ {
@@ -785,7 +785,7 @@ func (s *Server) requestManagerForIncoming(addr *net.UDPAddr, uuid string, total
 			ch := (<-replyW).(chan struct{})
 			select {
 			case <-ch:
-				return
+				break
 			case <-time.After(timeout):
 				// Send status request instead of immediate retry
 				replyS := make(chan any)
@@ -809,7 +809,7 @@ func (s *Server) requestManagerForIncoming(addr *net.UDPAddr, uuid string, total
 				}
 				if retries >= maxRetries {
 					fmt.Printf("Request for chunk %d from %s timed out after %d retries\n", idx, addr.String(), retries)
-					return
+					break
 				}
 			}
 			replyCh2 := make(chan any)
@@ -838,7 +838,7 @@ func (s *Server) incomingWorker() {
 		replyAddr := make(chan any)
 		s.fileStateChan <- FileCommand{Action: "getAddr", Key: uuid, Reply: replyAddr}
 		addr := (<-replyAddr).(*net.UDPAddr)
-		s.requestManagerForIncoming(addr, uuid, meta.TotalChunks)
+		s.requestManagerForIncoming(addr, uuid, meta.TotalChunks, meta.ChunkSize)
 	}
 }
 func (s *Server) MessageFromServerAnyTime() {
