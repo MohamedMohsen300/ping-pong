@@ -505,7 +505,7 @@ func (s *Server) handleRequestStatus(addr *net.UDPAddr, payload []byte, clientAc
 	}
 	s.packetGenerator(addr, AlreadySent, payload, clientAckPacketId, nil)
 }
-func (s *Server) handleStatusResponse( msgType byte, payload []byte) {
+func (s *Server) handleStatusResponse(msgType byte, payload []byte) {
 	if len(payload) < 4+UUIDLen {
 		return
 	}
