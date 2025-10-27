@@ -122,7 +122,7 @@ func (c *Client) writeWorker(id int) {
 	for {
 		job := <-c.writeQueue
 		n, err := c.conn.Write(job.Packet)
-		if n == 1209 {
+		if n == 65498+9 {
 			counter_write++
 		}
 		if err != nil {
@@ -135,7 +135,7 @@ func (c *Client) readWorker() {
 	buffer := make([]byte, 65507) // in for loop
 	for {
 		n, _, err := c.conn.ReadFromUDP(buffer)
-		if n == 1209 {
+		if n == 65498+9 {
 			counter_read++
 		}
 		if err != nil {
