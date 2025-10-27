@@ -409,7 +409,7 @@ func (c *Client) SendFileToServer(path string) error {
 		copy(payload[4:], chunkData)
 
 		c.packetGenerator(_chunk, payload, 0, nil, nil)
-		time.Sleep(100*time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 	return nil
 }
