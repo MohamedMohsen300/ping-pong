@@ -389,7 +389,7 @@ func (s *Server) fieldPacketTrackingWorker() {
 				s.builtpackets <- pending.Job
 				s.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
 			}
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(40 * time.Millisecond)
 		}
 	}
 }

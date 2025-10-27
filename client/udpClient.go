@@ -213,7 +213,7 @@ func (c *Client) fieldPacketTrackingWorker() {
 				c.writeQueue <- pending.Job
 				c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
 			}
-			time.Sleep(20 * time.Millisecond)
+			time.Sleep(40 * time.Millisecond)
 		}
 
 	}
@@ -492,7 +492,7 @@ func (c *Client) Start() {
 
 func main() {
 	//173.208.144.109
-	client := NewClient("2", "127.0.0.1:11000")
+	client := NewClient("2", "173.208.144.109:11000")
 	client.Start()
 
 	client.Register()
