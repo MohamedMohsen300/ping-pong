@@ -24,13 +24,13 @@ const (
 	_metadata = 5
 	_chunk    = 6
 
-	ChunkSize = 1200 //10000//65507 - (2 + 2 + 1 + 4)
+	ChunkSize = 65507 - (2 + 2 + 1 + 4)
 )
 
-const (
-	maxRetries = 4
-	// timeout    = 3 * time.Second
-)
+// const (
+// 	// maxRetries = 4
+// 	// timeout    = 3 * time.Second
+// )
 
 var counter_write = 0
 var counter_read = 0
@@ -61,7 +61,6 @@ type Mutex struct {
 type PendingPacketsJob struct {
 	Job
 	LastSend time.Time
-	Retries  int
 }
 
 type Client struct {
@@ -77,7 +76,7 @@ type Client struct {
 	snapshot   atomic.Value
 
 	packetIDCounter uint32
-	// rttEstimate     atomic.Value
+	rttEstimate     atomic.Value
 
 	// file receiving
 	mux            sync.Mutex
@@ -112,7 +111,7 @@ func NewClient(id string, server string) *Client {
 		receivedChunks: make(map[string]map[int]bool),
 	}
 	c.packetIDCounter = 0
-	// c.rttEstimate.Store(500 * time.Millisecond)
+	c.rttEstimate.Store(500 * time.Millisecond)
 
 	c.snapshot.Store(make(map[uint16]PendingPacketsJob))
 
@@ -194,28 +193,28 @@ func (c *Client) fieldPacketTrackingWorker() {
 		c.muxPending <- Mutex{Action: "getAllPending", Reply: reply}
 		pendings := (<-reply).(map[uint16]PendingPacketsJob)
 
-		for packetID, pending := range pendings {
-			if now.Sub(pending.LastSend) >= 2*time.Second {
-				// fmt.Printf("Retransmitting packet %d\n", packetID)
-				c.writeQueue <- pending.Job
-				c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
-			}
-			// time.Sleep(20 * time.Millisecond)
-		}
 		// for packetID, pending := range pendings {
-		// 	// compute retransmit timeout from rttEstimate
-		// 	rtt := c.rttEstimate.Load().(time.Duration)
-		// 	timeout := rtt * 2
-		// 	if timeout < 800*time.Millisecond {
-		// 		timeout = 800 * time.Millisecond
-		// 	}
-		// 	if now.Sub(pending.LastSend) >= timeout {
-		// 		// fmt.Printf("Retransmitting packet %d\n", packetID)
+		// 	if now.Sub(pending.LastSend) >= 1*time.Second {
+		// 		fmt.Printf("Retransmitting packet %d\n", packetID)
 		// 		c.writeQueue <- pending.Job
 		// 		c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
 		// 	}
 		// 	time.Sleep(20 * time.Millisecond)
 		// }
+		for packetID, pending := range pendings {
+			// compute retransmit timeout from rttEstimate
+			rtt := c.rttEstimate.Load().(time.Duration)
+			timeout := rtt * 2
+			if timeout < 800*time.Millisecond {
+				timeout = 800 * time.Millisecond
+			}
+			if now.Sub(pending.LastSend) >= timeout {
+				// fmt.Printf("Retransmitting packet %d\n", packetID)
+				c.writeQueue <- pending.Job
+				c.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
 
 	}
 }
@@ -247,7 +246,7 @@ func (c *Client) packetGeneratorWorker() {
 			binary.BigEndian.PutUint16(packet[0:2], packetID)
 			c.muxPending <- Mutex{Action: "addPending", PacketID: packetID, Packet: packet}
 
-			// metadata only
+			// for metadata only
 			if task.AckChan != nil {
 				go func(pid uint16, ackCh chan struct{}) {
 					for {
@@ -410,7 +409,7 @@ func (c *Client) SendFileToServer(path string) error {
 		copy(payload[4:], chunkData)
 
 		c.packetGenerator(_chunk, payload, 0, nil, nil)
-		// time.Sleep(time.Millisecond)
+		time.Sleep(5*time.Millisecond)
 	}
 	return nil
 }
@@ -422,37 +421,30 @@ func (c *Client) MutexHandleActions() {
 			c.pendingPackets[mu.PacketID] = PendingPacketsJob{
 				Job:      Job{Addr: mu.Addr, Packet: mu.Packet},
 				LastSend: time.Now(),
-				Retries:  0,
 			}
 			c.updatePendingSnapshot()
 
 		case "updatePending":
 			if p, ok := c.pendingPackets[mu.PacketID]; ok {
 				p.LastSend = time.Now()
-				p.Retries++
 				c.pendingPackets[mu.PacketID] = p
-
-				if p.Retries >= maxRetries {
-					delete(c.pendingPackets, mu.PacketID)
-					fmt.Printf("Packet %d dropped after %d retries\n", mu.PacketID, p.Retries)
-				}
 				c.updatePendingSnapshot()
 			}
 
-		case "deletePending":
-			delete(c.pendingPackets, mu.PacketID)
-			c.updatePendingSnapshot()
 		// case "deletePending":
-		// 	// if present, compute RTT from snapshot or c.pendingPackets
-		// 	if p, ok := c.pendingPackets[mu.PacketID]; ok {
-		// 		rtt := time.Since(p.LastSend)
-		// 		// EWMA update: new = old*(7/8) + rtt*(1/8)
-		// 		old := c.rttEstimate.Load().(time.Duration)
-		// 		newRTT := (old*7 + rtt) / 8
-		// 		c.rttEstimate.Store(newRTT)
-		// 	}
 		// 	delete(c.pendingPackets, mu.PacketID)
 		// 	c.updatePendingSnapshot()
+		case "deletePending":
+			// if present, compute RTT from snapshot or c.pendingPackets
+			if p, ok := c.pendingPackets[mu.PacketID]; ok {
+				rtt := time.Since(p.LastSend)
+				// EWMA update: new = old*(7/8) + rtt*(1/8)
+				old := c.rttEstimate.Load().(time.Duration)
+				newRTT := (old*7 + rtt) / 8
+				c.rttEstimate.Store(newRTT)
+			}
+			delete(c.pendingPackets, mu.PacketID)
+			c.updatePendingSnapshot()
 
 		case "getAllPending":
 			// copy := make(map[uint16]models.PendingPacketsJob)

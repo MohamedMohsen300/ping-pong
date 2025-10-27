@@ -24,12 +24,7 @@ const (
 	Metadata = 5
 	Chunk    = 6
 	//total - (pktID + encDec + msgtype + chunkIndex)
-	ChunkSize = 1200 //10000 //65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
-)
-
-const (
-	maxRetries = 4
-	// timeout    = 3 * time.Second
+	ChunkSize = 65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
 )
 
 var counter_write = 0
@@ -51,7 +46,6 @@ type GenTask struct {
 type PendingPacketsJob struct {
 	Job
 	LastSend time.Time
-	Retries  int
 }
 
 type Client struct {
@@ -228,6 +222,8 @@ func (s *Server) pktGWorker() {
 		if task.MsgType != Ack {
 			binary.BigEndian.PutUint16(packet[0:2], packetID)
 			s.muxPending <- Mutex{Action: "addPending", PacketID: packetID, Addr: task.Addr, Packet: packet}
+
+			// for metadata only
 			if task.AckChan != nil {
 				s.muxClient <- Mutex{Action: "registerAckMetadata", PacketID: packetID, AckChan: task.AckChan}
 			}
@@ -393,7 +389,7 @@ func (s *Server) fieldPacketTrackingWorker() {
 				s.builtpackets <- pending.Job
 				s.muxPending <- Mutex{Action: "updatePending", PacketID: packetID}
 			}
-			// time.Sleep(20 * time.Millisecond)
+			time.Sleep(5 * time.Millisecond)
 		}
 	}
 }
@@ -446,7 +442,7 @@ func (s *Server) SendFileToClient(client *Client, filepath string, filename stri
 		copy(payload[4:], chunkData)
 
 		s.packetGenerator(client.Addr, Chunk, payload, 0, nil)
-		// time.Sleep(5 * time.Millisecond)
+		time.Sleep(5 * time.Millisecond)
 	}
 	return nil
 }
@@ -480,25 +476,13 @@ func (s *Server) MutexHandleActions() {
 			s.pendingPackets[mu.PacketID] = PendingPacketsJob{
 				Job:      Job{Addr: mu.Addr, Packet: mu.Packet},
 				LastSend: time.Now(),
-				Retries:  0,
 			}
 			s.updatePendingSnapshot()
 
 		case "updatePending":
 			if p, ok := s.pendingPackets[mu.PacketID]; ok {
 				p.LastSend = time.Now()
-				p.Retries++
 				s.pendingPackets[mu.PacketID] = p
-
-				// check of retries of each packet
-				if p.Retries >= maxRetries {
-					delete(s.pendingPackets, mu.PacketID)
-					if ch, ok := s.metaPendingMap[mu.PacketID]; ok {
-						close(ch)
-						delete(s.metaPendingMap, mu.PacketID)
-					}
-					fmt.Printf("Packet %d dropped after %d retries\n", mu.PacketID, p.Retries)
-				}
 				s.updatePendingSnapshot()
 			}
 
