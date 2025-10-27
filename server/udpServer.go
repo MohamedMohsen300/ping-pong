@@ -27,9 +27,6 @@ const (
 	ChunkSize = 65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
 )
 
-var counter_write = 0
-var counter_read = 0
-
 type Job struct {
 	Addr   *net.UDPAddr
 	Packet []byte
@@ -126,10 +123,7 @@ func NewServer(addr string) (*Server, error) {
 func (s *Server) udpWriteWorker(id int) {
 	for { // 2+2+1+ 4+1200  = 1209
 		job := <-s.writeQueue
-		n, err := s.conn.WriteToUDP(job.Packet, job.Addr)
-		if n == 65498+9 {
-			counter_write++
-		}
+		_, err := s.conn.WriteToUDP(job.Packet, job.Addr)
 		if err != nil {
 			fmt.Printf("Writer %d error: %v\n", id, err)
 		}
@@ -140,9 +134,6 @@ func (s *Server) udpReadWorker() {
 	buf := make([]byte, 65507)
 	for {
 		n, addr, err := s.conn.ReadFromUDP(buf)
-		if n == 65498+9 {
-			counter_read++
-		}
 		if err != nil {
 			fmt.Println("Read error:", err)
 			continue
@@ -189,8 +180,6 @@ func (s *Server) handlePing(addr *net.UDPAddr, clientAckPacketId uint16) {
 	}
 	s.packetGenerator(addr, Ack, []byte("pong"), clientAckPacketId, nil)
 	fmt.Printf("Ping from %s\n", client.ID)
-	fmt.Println("counter_write", counter_write)
-	fmt.Println("counter_read", counter_read)
 }
 
 func (s *Server) handleMessage(addr *net.UDPAddr, payload []byte, clientAckPacketId uint16) {
@@ -442,7 +431,7 @@ func (s *Server) SendFileToClient(client *Client, filepath string, filename stri
 		copy(payload[4:], chunkData)
 
 		s.packetGenerator(client.Addr, Chunk, payload, 0, nil)
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
 	return nil
 }

@@ -23,17 +23,9 @@ const (
 	_ack      = 4
 	_metadata = 5
 	_chunk    = 6
-
-	ChunkSize = 65507 - (2 + 2 + 1 + 4)
+	//total - (pktID + encDec + msgtype + chunkIndex)
+	ChunkSize = 65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
 )
-
-// const (
-// 	// maxRetries = 4
-// 	// timeout    = 3 * time.Second
-// )
-
-var counter_write = 0
-var counter_read = 0
 
 type Job struct {
 	Addr   *net.UDPAddr
@@ -121,10 +113,7 @@ func NewClient(id string, server string) *Client {
 func (c *Client) writeWorker(id int) {
 	for {
 		job := <-c.writeQueue
-		n, err := c.conn.Write(job.Packet)
-		if n == 65498+9 {
-			counter_write++
-		}
+		_, err := c.conn.Write(job.Packet)
 		if err != nil {
 			fmt.Printf("Writer %d error: %v\n", id, err)
 		}
@@ -135,9 +124,6 @@ func (c *Client) readWorker() {
 	buffer := make([]byte, 65507) // in for loop
 	for {
 		n, _, err := c.conn.ReadFromUDP(buffer)
-		if n == 65498+9 {
-			counter_read++
-		}
 		if err != nil {
 			fmt.Println("Error receiving:", err)
 			continue
@@ -409,7 +395,7 @@ func (c *Client) SendFileToServer(path string) error {
 		copy(payload[4:], chunkData)
 
 		c.packetGenerator(_chunk, payload, 0, nil, nil)
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
 	return nil
 }
@@ -501,8 +487,6 @@ func main() {
 	go func() {
 		for range ticker.C {
 			client.Ping()
-			fmt.Println("counter_write", counter_write)
-			fmt.Println("counter_read", counter_read)
 		}
 	}()
 
