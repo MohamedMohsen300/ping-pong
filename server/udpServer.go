@@ -65,11 +65,9 @@ var (
 
 // add client
 func addClient(addr string, sess *quic.Conn) {
-	addr = normalizeAddr(sess.RemoteAddr().String())
 	clientsMu.Lock()
 	clients[addr] = sess
 	clientsMu.Unlock()
-	fmt.Println("New client connected:", addr)
 
 }
 
@@ -97,10 +95,6 @@ func listClients() []string {
 	}
 	clientsMu.RUnlock()
 	return out
-}
-
-func normalizeAddr(addr string) string {
-	return strings.TrimPrefix(addr, "[::ffff:")
 }
 
 // ----------------- stream / file helpers -----------------
