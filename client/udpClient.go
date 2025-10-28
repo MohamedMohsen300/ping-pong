@@ -29,7 +29,7 @@ func handleIncomingStreams(sess *quic.Conn) {
 			fmt.Println("accept stream error:", err)
 			return
 		}
-		handleStream(stream)
+		go handleStream(stream)
 	}
 }
 
@@ -56,12 +56,34 @@ func handleStream(stream *quic.Stream) {
 	}
 	defer f.Close()
 
-	n, err := io.Copy(f, reader)
-	if err != nil && !strings.Contains(err.Error(), "Application error 0x0") {
-		fmt.Println("error writing file:", err)
-		return
+	buffer := make([]byte, 64*1024) // 64KB buffer
+	var totalBytes int64
+	start := time.Now()
+	lastPrint := time.Now()
+
+	for {
+		n, err := reader.Read(buffer)
+		if n > 0 {
+			totalBytes += int64(n)
+			f.Write(buffer[:n])
+		}
+		// progress print every second
+		if time.Since(lastPrint) > time.Second {
+			mb := float64(totalBytes) / (1024 * 1024)
+			speed := mb / time.Since(start).Seconds()
+			fmt.Printf("\r📥 Received %.2f MB | Speed: %.2f MB/s", mb, speed)
+			lastPrint = time.Now()
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			fmt.Println("\nerror reading stream:", err)
+			return
+		}
 	}
-	fmt.Printf("received %s (%d bytes)\n", outPath, n)
+	elapsed := time.Since(start)
+	fmt.Printf("\n✅ received %s (%.2f MB) in %.2fs\n", outPath, float64(totalBytes)/(1024*1024), elapsed.Seconds())
 }
 
 // ----------------- send file to server -----------------
@@ -84,13 +106,39 @@ func sendFile(sess *quic.Conn, path string) error {
 	}
 	defer f.Close()
 
+	fileInfo, _ := f.Stat()
+	fileSize := fileInfo.Size()
+	buffer := make([]byte, 64*1024) // 64KB chunks
+
 	start := time.Now()
-	n, err := io.Copy(stream, f)
-	if err != nil && !strings.Contains(err.Error(), "Application error 0x0") {
-		return fmt.Errorf("failed to copy file: %w", err)
+	var sent int64
+	lastPrint := time.Now()
+
+	for {
+		n, err := f.Read(buffer)
+		if n > 0 {
+			stream.Write(buffer[:n])
+			sent += int64(n)
+		}
+		// print progress every second
+		if time.Since(lastPrint) > time.Second {
+			percent := float64(sent) / float64(fileSize) * 100
+			mbSent := float64(sent) / (1024 * 1024)
+			speed := mbSent / time.Since(start).Seconds()
+			fmt.Printf("\r📤 Sent: %.2f MB (%.1f%%) | Speed: %.2f MB/s", mbSent, percent, speed)
+			lastPrint = time.Now()
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			fmt.Println("\nerror reading file:", err)
+			break
+		}
 	}
+
 	elapsed := time.Since(start)
-	fmt.Printf("sent %s (%d bytes) in %v\n", filename, n, elapsed)
+	fmt.Printf("\n✅ sent %s (%.2f MB) in %.2fs\n", filename, float64(sent)/(1024*1024), elapsed.Seconds())
 	return nil
 }
 

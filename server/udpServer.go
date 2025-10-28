@@ -57,13 +57,11 @@ func generateTLSConfig() *tls.Config {
 	}
 }
 
-// ----------------- clients map -----------------
 var (
-	clients   = make(map[string]*quic.Conn) // key: remoteAddr string
+	clients   = make(map[string]*quic.Conn)
 	clientsMu sync.RWMutex
 )
 
-// ----------------- client -----------------
 func addClient(addr string, sess *quic.Conn) {
 	clientsMu.Lock()
 	clients[addr] = sess
@@ -93,7 +91,6 @@ func listClients() []string {
 	return out
 }
 
-// ----------------- handle file -----------------
 func handleIncomingStreams(sess *quic.Conn, remoteAddr string) {
 	for {
 		stream, err := sess.AcceptStream(context.Background())
@@ -102,20 +99,16 @@ func handleIncomingStreams(sess *quic.Conn, remoteAddr string) {
 			removeClient(remoteAddr)
 			return
 		}
-		// pass pointer to avoid copying locks
-		handleStream(stream)
+		go handleStream(stream)
 	}
 }
 
 func handleStream(stream *quic.Stream) {
 	defer stream.Close()
 
-	// buf :=make([]byte,65000)
-	// n,err:=stream.Read(buf)
 	reader := bufio.NewReader(stream)
 	line, err := reader.ReadString('\n')
 	if err != nil {
-		// probably peer closed early
 		if !strings.Contains(err.Error(), "Application error 0x0") {
 			fmt.Println("failed to read filename header:", err)
 		}
@@ -135,15 +128,35 @@ func handleStream(stream *quic.Stream) {
 	}
 	defer f.Close()
 
-	n, err := io.Copy(f, reader)
-	if err != nil && !strings.Contains(err.Error(), "Application error 0x0") {
-		fmt.Printf("error while writing file %s: %v\n", outPath, err)
-		return
+	buffer := make([]byte, 64*1024)
+	var total int64
+	start := time.Now()
+	lastPrint := time.Now()
+
+	for {
+		n, err := reader.Read(buffer)
+		if n > 0 {
+			total += int64(n)
+			f.Write(buffer[:n])
+		}
+		if time.Since(lastPrint) > time.Second {
+			mb := float64(total) / (1024 * 1024)
+			speed := mb / time.Since(start).Seconds()
+			fmt.Printf("\r📥 Receiving %s: %.2f MB | Speed: %.2f MB/s", filename, mb, speed)
+			lastPrint = time.Now()
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			fmt.Println("\nerror reading stream:", err)
+			return
+		}
 	}
-	fmt.Printf("saved file %s (%d bytes)\n", outPath, n)
+	fmt.Printf("\n✅ received %s (%.2f MB)\n", outPath, float64(total)/(1024*1024))
 }
 
-// ----------------- send file to client -----------------
+// ----------------- Send file with tracking -----------------
 func sendFileOnSession(sess *quic.Conn, path string) error {
 	stream, err := sess.OpenStreamSync(context.Background())
 	if err != nil {
@@ -163,16 +176,39 @@ func sendFileOnSession(sess *quic.Conn, path string) error {
 	}
 	defer f.Close()
 
+	info, _ := f.Stat()
+	fileSize := info.Size()
+
+	buffer := make([]byte, 64*1024)
+	var sent int64
 	start := time.Now()
-	n, err := io.Copy(stream, f)
-	if err != nil && !strings.Contains(err.Error(), "Application error 0x0") {
-		return fmt.Errorf("failed to copy file to stream: %w", err)
+	lastPrint := time.Now()
+
+	for {
+		n, err := f.Read(buffer)
+		if n > 0 {
+			stream.Write(buffer[:n])
+			sent += int64(n)
+		}
+		if time.Since(lastPrint) > time.Second {
+			percent := float64(sent) / float64(fileSize) * 100
+			mbSent := float64(sent) / (1024 * 1024)
+			speed := mbSent / time.Since(start).Seconds()
+			fmt.Printf("\r📤 Sending %s: %.2f MB (%.1f%%) | Speed: %.2f MB/s", filename, mbSent, percent, speed)
+			lastPrint = time.Now()
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("error reading file: %w", err)
+		}
 	}
-	fmt.Printf("sent %s (%d bytes) in %v\n", filename, n, time.Since(start))
+
+	fmt.Printf("\n✅ sent %s (%.2f MB) successfully\n", filename, float64(sent)/(1024*1024))
 	return nil
 }
 
-// ----------------- stdin command loop (global) -----------------
 func stdinCommandLoop() {
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -188,20 +224,13 @@ func stdinCommandLoop() {
 		}
 
 		switch {
-		case line == "help":
-			fmt.Println("commands:")
-			fmt.Println("  list                                - list connected clients")
-			fmt.Println("  sendfile <clientAddr> <filename>    - send file to specific client")
-			fmt.Println("  broadcast <filename>                - send file to all clients")
-			fmt.Println("  disconnect <clientAddr>             - disconnect a client")
-			fmt.Println("  quit / exit                         - stop server")
 		case line == "list":
-			clients := listClients()
-			if len(clients) == 0 {
+			cs := listClients()
+			if len(cs) == 0 {
 				fmt.Println("no clients connected")
 			} else {
 				fmt.Println("connected clients:")
-				for _, c := range clients {
+				for _, c := range cs {
 					fmt.Println(" ", c)
 				}
 			}
@@ -214,10 +243,6 @@ func stdinCommandLoop() {
 			}
 			clientAddr := strings.TrimSpace(parts[0])
 			filename := strings.TrimSpace(parts[1])
-			if filename == "" {
-				fmt.Println("provide filename")
-				continue
-			}
 			sess, ok := getClient(clientAddr)
 			if !ok {
 				fmt.Println("no such client:", clientAddr)
@@ -243,43 +268,28 @@ func stdinCommandLoop() {
 			clientsMu.RLock()
 			for addr, sess := range clients {
 				go func(a string, s *quic.Conn) {
+					fmt.Println("broadcasting to", a)
 					if err := sendFileOnSession(s, filename); err != nil {
 						fmt.Println("broadcast send error to", a, ":", err)
 					}
 				}(addr, sess)
 			}
 			clientsMu.RUnlock()
-		case strings.HasPrefix(line, "disconnect "):
-			addr := strings.TrimSpace(strings.TrimPrefix(line, "disconnect "))
-			if addr == "" {
-				fmt.Println("provide client address")
-				continue
-			}
-			sess, ok := getClient(addr)
-			if !ok {
-				fmt.Println("no such client:", addr)
-				continue
-			}
-			_ = sess.CloseWithError(quic.ApplicationErrorCode(0), "server disconnect")
-			removeClient(addr)
-			fmt.Println("disconnected", addr)
 		case line == "quit" || line == "exit":
-			fmt.Println("shutting down server — closing all sessions")
-			// close all sessions
+			fmt.Println("closing all clients and exiting...")
 			clientsMu.RLock()
 			for addr, sess := range clients {
-				_ = sess.CloseWithError(quic.ApplicationErrorCode(0), "server shutting down")
+				sess.CloseWithError(0, "server shutdown")
 				fmt.Println("closed", addr)
 			}
 			clientsMu.RUnlock()
 			os.Exit(0)
 		default:
-			fmt.Println("unknown command — type 'help' for usage")
+			fmt.Println("unknown command — available: list, sendfile, broadcast, quit")
 		}
 	}
 }
 
-// ----------------- main -----------------
 func main() {
 	addr := ":11000"
 	quicConfig := &quic.Config{
@@ -292,8 +302,6 @@ func main() {
 		panic(err)
 	}
 	fmt.Println("QUIC server listening on", addr)
-
-	// start stdin loop in background
 	go stdinCommandLoop()
 
 	for {
@@ -303,12 +311,8 @@ func main() {
 			continue
 		}
 		remote := sess.RemoteAddr().String()
-		fmt.Println("new session from", remote)
-
-		// store session
+		fmt.Println("new client:", remote)
 		addClient(remote, sess)
-
-		// handle incoming streams for this session
 		go handleIncomingStreams(sess, remote)
 	}
 }
