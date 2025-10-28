@@ -24,7 +24,7 @@ const (
 	_metadata = 5
 	_chunk    = 6
 	//total - (pktID + encDec + msgtype + chunkIndex)
-	ChunkSize = 65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
+	ChunkSize = 1400//65507 - (2 + 2 + 1 + 4) // 65507 - 9 = 65498    //32768
 )
 
 type Job struct {
