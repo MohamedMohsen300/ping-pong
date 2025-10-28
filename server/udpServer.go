@@ -288,7 +288,12 @@ func stdinCommandLoop() {
 
 func main() {
 	addr := ":11000"
-	listener, err := quic.ListenAddr(addr, generateTLSConfig(), nil)
+	quicConfig := &quic.Config{
+		KeepAlivePeriod: 10 * time.Second,
+		MaxIdleTimeout:  2 * time.Minute,
+	}
+
+	listener, err := quic.ListenAddr(addr, generateTLSConfig(), quicConfig)
 	if err != nil {
 		panic(err)
 	}
