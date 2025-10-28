@@ -71,19 +71,19 @@ func handleStream(stream *quic.Stream) {
 		if time.Since(lastPrint) > time.Second {
 			mb := float64(totalBytes) / (1024 * 1024)
 			speed := mb / time.Since(start).Seconds()
-			fmt.Printf("\r📥 Received %.2f MB | Speed: %.2f MB/s", mb, speed)
+			fmt.Printf("\r Received %.2f MB | Speed: %.2f MB/s", mb, speed)
 			lastPrint = time.Now()
 		}
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			fmt.Println("\nerror reading stream:", err)
+			fmt.Println("\n error reading stream:", err)
 			return
 		}
 	}
 	elapsed := time.Since(start)
-	fmt.Printf("\n✅ received %s (%.2f MB) in %.2fs\n", outPath, float64(totalBytes)/(1024*1024), elapsed.Seconds())
+	fmt.Printf("\n received %s (%.2f MB) in %.2fs\n", outPath, float64(totalBytes)/(1024*1024), elapsed.Seconds())
 }
 
 // ----------------- send file to server -----------------
@@ -125,7 +125,7 @@ func sendFile(sess *quic.Conn, path string) error {
 			percent := float64(sent) / float64(fileSize) * 100
 			mbSent := float64(sent) / (1024 * 1024)
 			speed := mbSent / time.Since(start).Seconds()
-			fmt.Printf("\r📤 Sent: %.2f MB (%.1f%%) | Speed: %.2f MB/s", mbSent, percent, speed)
+			fmt.Printf("\r Sent: %.2f MB (%.1f%%) | Speed: %.2f MB/s", mbSent, percent, speed)
 			lastPrint = time.Now()
 		}
 		if err == io.EOF {
@@ -138,7 +138,7 @@ func sendFile(sess *quic.Conn, path string) error {
 	}
 
 	elapsed := time.Since(start)
-	fmt.Printf("\n✅ sent %s (%.2f MB) in %.2fs\n", filename, float64(sent)/(1024*1024), elapsed.Seconds())
+	fmt.Printf("\n sent %s (%.2f MB) in %.2fs\n", filename, float64(sent)/(1024*1024), elapsed.Seconds())
 	return nil
 }
 

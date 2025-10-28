@@ -99,7 +99,7 @@ func handleIncomingStreams(sess *quic.Conn, remoteAddr string) {
 			removeClient(remoteAddr)
 			return
 		}
-		go handleStream(stream)
+		handleStream(stream)
 	}
 }
 
@@ -142,7 +142,7 @@ func handleStream(stream *quic.Stream) {
 		if time.Since(lastPrint) > time.Second {
 			mb := float64(total) / (1024 * 1024)
 			speed := mb / time.Since(start).Seconds()
-			fmt.Printf("\r📥 Receiving %s: %.2f MB | Speed: %.2f MB/s", filename, mb, speed)
+			fmt.Printf("\r Receiving %s: %.2f MB | Speed: %.2f MB/s", filename, mb, speed)
 			lastPrint = time.Now()
 		}
 		if err == io.EOF {
@@ -153,7 +153,7 @@ func handleStream(stream *quic.Stream) {
 			return
 		}
 	}
-	fmt.Printf("\n✅ received %s (%.2f MB)\n", outPath, float64(total)/(1024*1024))
+	fmt.Printf("\n received %s (%.2f MB)\n", outPath, float64(total)/(1024*1024))
 }
 
 // ----------------- Send file with tracking -----------------
@@ -194,7 +194,7 @@ func sendFileOnSession(sess *quic.Conn, path string) error {
 			percent := float64(sent) / float64(fileSize) * 100
 			mbSent := float64(sent) / (1024 * 1024)
 			speed := mbSent / time.Since(start).Seconds()
-			fmt.Printf("\r📤 Sending %s: %.2f MB (%.1f%%) | Speed: %.2f MB/s", filename, mbSent, percent, speed)
+			fmt.Printf("\r Sending %s: %.2f MB (%.1f%%) | Speed: %.2f MB/s", filename, mbSent, percent, speed)
 			lastPrint = time.Now()
 		}
 		if err == io.EOF {
@@ -205,7 +205,7 @@ func sendFileOnSession(sess *quic.Conn, path string) error {
 		}
 	}
 
-	fmt.Printf("\n✅ sent %s (%.2f MB) successfully\n", filename, float64(sent)/(1024*1024))
+	fmt.Printf("\n sent %s (%.2f MB) successfully\n", filename, float64(sent)/(1024*1024))
 	return nil
 }
 
