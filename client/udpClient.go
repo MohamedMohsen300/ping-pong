@@ -60,7 +60,7 @@ func handleStream(stream *quic.Stream) {
 		fmt.Println("error writing file:", err)
 		return
 	}
-	fmt.Printf("✅ received %s (%d bytes)\n", outPath, n)
+	fmt.Printf("received %s (%d bytes)\n", outPath, n)
 }
 
 func sendFile(sess *quic.Conn, path string) error {
@@ -88,7 +88,7 @@ func sendFile(sess *quic.Conn, path string) error {
 		return fmt.Errorf("failed to copy file: %w", err)
 	}
 	elapsed := time.Since(start)
-	fmt.Printf("📤 sent %s (%d bytes) in %v\n", filename, n, elapsed)
+	fmt.Printf("sent %s (%d bytes) in %v\n", filename, n, elapsed)
 	return nil
 }
 
@@ -107,7 +107,7 @@ func main() {
 	}
 	defer sess.CloseWithError(0, "client closed")
 
-	fmt.Println("✅ connected to server", addr)
+	fmt.Println("connected to server", addr)
 	go handleIncomingStreams(sess)
 
 	reader := bufio.NewReader(os.Stdin)
@@ -123,10 +123,10 @@ func main() {
 			sess.CloseWithError(0, "bye")
 			return
 		}
-		if strings.HasPrefix(line, "sendfile:") {
-			path := strings.TrimSpace(strings.TrimPrefix(line, "sendfile:"))
+		if strings.HasPrefix(line, "sendfile ") {
+			path := strings.TrimSpace(strings.TrimPrefix(line, "sendfile "))
 			if path == "" {
-				fmt.Println("provide filename after sendfile:")
+				fmt.Println("provide filename after sendfile ")
 				continue
 			}
 			if _, err := os.Stat(path); os.IsNotExist(err) {

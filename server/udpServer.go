@@ -137,7 +137,7 @@ func handleStream(stream *quic.Stream) {
 		fmt.Printf("error while writing file %s: %v\n", outPath, err)
 		return
 	}
-	fmt.Printf("✅ saved file %s (%d bytes)\n", outPath, n)
+	fmt.Printf("saved file %s (%d bytes)\n", outPath, n)
 }
 
 // sendFileOnSession opens stream on sess and sends filename + contents
@@ -165,7 +165,7 @@ func sendFileOnSession(sess *quic.Conn, path string) error {
 	if err != nil && !strings.Contains(err.Error(), "Application error 0x0") {
 		return fmt.Errorf("failed to copy file to stream: %w", err)
 	}
-	fmt.Printf("📤 sent %s (%d bytes) in %v\n", filename, n, time.Since(start))
+	fmt.Printf("sent %s (%d bytes) in %v\n", filename, n, time.Since(start))
 	return nil
 }
 
@@ -203,9 +203,9 @@ func stdinCommandLoop() {
 		case line == "help":
 			fmt.Println("commands:")
 			fmt.Println("  list                                - list connected clients")
-			fmt.Println("  sendfile:<clientAddr>:<filename>    - send file to specific client")
-			fmt.Println("  broadcast:<filename>                - send file to all clients")
-			fmt.Println("  disconnect:<clientAddr>             - disconnect a client")
+			fmt.Println("  sendfile <clientAddr> <filename>    - send file to specific client")
+			fmt.Println("  broadcast <filename>                - send file to all clients")
+			fmt.Println("  disconnect <clientAddr>             - disconnect a client")
 			fmt.Println("  quit / exit                         - stop server")
 		case line == "list":
 			clients := listClients()
@@ -217,11 +217,11 @@ func stdinCommandLoop() {
 					fmt.Println(" ", c)
 				}
 			}
-		case strings.HasPrefix(line, "sendfile:"):
-			rest := strings.TrimPrefix(line, "sendfile:")
-			parts := strings.SplitN(rest, ":", 2)
+		case strings.HasPrefix(line, "sendfile "):
+			rest := strings.TrimPrefix(line, "sendfile ")
+			parts := strings.SplitN(rest, " ", 2)
 			if len(parts) != 2 {
-				fmt.Println("usage: sendfile:<clientAddr>:<filename>")
+				fmt.Println("usage: sendfile <clientAddr> <filename>")
 				continue
 			}
 			clientAddr := strings.TrimSpace(parts[0])
@@ -242,8 +242,8 @@ func stdinCommandLoop() {
 			if err := sendFileOnSession(sess, filename); err != nil {
 				fmt.Println("send error:", err)
 			}
-		case strings.HasPrefix(line, "broadcast:"):
-			filename := strings.TrimSpace(strings.TrimPrefix(line, "broadcast:"))
+		case strings.HasPrefix(line, "broadcast "):
+			filename := strings.TrimSpace(strings.TrimPrefix(line, "broadcast "))
 			if filename == "" {
 				fmt.Println("provide filename")
 				continue
@@ -261,8 +261,8 @@ func stdinCommandLoop() {
 				}(addr, sess)
 			}
 			clientsMu.RUnlock()
-		case strings.HasPrefix(line, "disconnect:"):
-			addr := strings.TrimSpace(strings.TrimPrefix(line, "disconnect:"))
+		case strings.HasPrefix(line, "disconnect "):
+			addr := strings.TrimSpace(strings.TrimPrefix(line, "disconnect "))
 			if addr == "" {
 				fmt.Println("provide client address")
 				continue
