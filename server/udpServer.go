@@ -63,22 +63,19 @@ var (
 	clientsMu sync.RWMutex
 )
 
-// add client
+// ----------------- client -----------------
 func addClient(addr string, sess *quic.Conn) {
 	clientsMu.Lock()
 	clients[addr] = sess
 	clientsMu.Unlock()
-
 }
 
-// remove client
 func removeClient(addr string) {
 	clientsMu.Lock()
 	delete(clients, addr)
 	clientsMu.Unlock()
 }
 
-// get client
 func getClient(addr string) (*quic.Conn, bool) {
 	clientsMu.RLock()
 	s, ok := clients[addr]
@@ -86,7 +83,6 @@ func getClient(addr string) (*quic.Conn, bool) {
 	return s, ok
 }
 
-// list clients
 func listClients() []string {
 	clientsMu.RLock()
 	out := make([]string, 0, len(clients))
@@ -97,12 +93,25 @@ func listClients() []string {
 	return out
 }
 
-// ----------------- stream / file helpers -----------------
+// ----------------- handle file -----------------
+func handleIncomingStreams(sess *quic.Conn, remoteAddr string) {
+	for {
+		stream, err := sess.AcceptStream(context.Background())
+		if err != nil {
+			fmt.Printf("session %s accept stream error (closed?): %v\n", remoteAddr, err)
+			removeClient(remoteAddr)
+			return
+		}
+		// pass pointer to avoid copying locks
+		handleStream(stream)
+	}
+}
 
-// handleStream reads filename\n then copies rest to fromPeer_<filename>
 func handleStream(stream *quic.Stream) {
 	defer stream.Close()
 
+	// buf :=make([]byte,65000)
+	// n,err:=stream.Read(buf)
 	reader := bufio.NewReader(stream)
 	line, err := reader.ReadString('\n')
 	if err != nil {
@@ -134,7 +143,7 @@ func handleStream(stream *quic.Stream) {
 	fmt.Printf("saved file %s (%d bytes)\n", outPath, n)
 }
 
-// sendFileOnSession opens stream on sess and sends filename + contents
+// ----------------- send file to client -----------------
 func sendFileOnSession(sess *quic.Conn, path string) error {
 	stream, err := sess.OpenStreamSync(context.Background())
 	if err != nil {
@@ -163,22 +172,7 @@ func sendFileOnSession(sess *quic.Conn, path string) error {
 	return nil
 }
 
-// handleIncomingStreams listens for incoming streams on a session
-func handleIncomingStreams(sess *quic.Conn, remoteAddr string) {
-	for {
-		stream, err := sess.AcceptStream(context.Background())
-		if err != nil {
-			fmt.Printf("session %s accept stream error (closed?): %v\n", remoteAddr, err)
-			removeClient(remoteAddr)
-			return
-		}
-		// pass pointer to avoid copying locks
-		go handleStream(stream)
-	}
-}
-
 // ----------------- stdin command loop (global) -----------------
-
 func stdinCommandLoop() {
 	reader := bufio.NewReader(os.Stdin)
 	for {
@@ -286,7 +280,6 @@ func stdinCommandLoop() {
 }
 
 // ----------------- main -----------------
-
 func main() {
 	addr := ":11000"
 	quicConfig := &quic.Config{

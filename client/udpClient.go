@@ -21,6 +21,7 @@ func clientTLSConfig() *tls.Config {
 	}
 }
 
+// ----------------- handle file from server -----------------
 func handleIncomingStreams(sess *quic.Conn) {
 	for {
 		stream, err := sess.AcceptStream(context.Background())
@@ -28,7 +29,7 @@ func handleIncomingStreams(sess *quic.Conn) {
 			fmt.Println("accept stream error:", err)
 			return
 		}
-		go handleStream(stream)
+		handleStream(stream)
 	}
 }
 
@@ -63,6 +64,7 @@ func handleStream(stream *quic.Stream) {
 	fmt.Printf("received %s (%d bytes)\n", outPath, n)
 }
 
+// ----------------- send file to server -----------------
 func sendFile(sess *quic.Conn, path string) error {
 	stream, err := sess.OpenStreamSync(context.Background())
 	if err != nil {
