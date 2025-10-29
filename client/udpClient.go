@@ -145,12 +145,12 @@ func sendFile(sess *quic.Conn, path string) error {
 func main() {
 	addr := "173.208.144.109:11000"
 
-	quicConfig := &quic.Config{
-		KeepAlivePeriod: 10 * time.Second,
-		MaxIdleTimeout:  2 * time.Minute,
-	}
+	// quicConfig := &quic.Config{
+	// 	KeepAlivePeriod: 10 * time.Second,
+	// 	MaxIdleTimeout:  2 * time.Minute,
+	// }
 
-	sess, err := quic.DialAddr(context.Background(), addr, clientTLSConfig(), quicConfig)
+	sess, err := quic.DialAddr(context.Background(), addr, clientTLSConfig(), nil)
 	if err != nil {
 		fmt.Println("failed to connect:", err)
 		return
