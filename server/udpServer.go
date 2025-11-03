@@ -291,7 +291,7 @@ func stdinCommandLoop() {
 }
 
 func main() {
-	addr := ":11000"
+	addr := ":9000"
 	// quicConfig := &quic.Config{
 	// 	KeepAlivePeriod: 10 * time.Second,
 	// 	MaxIdleTimeout:  2 * time.Minute,
